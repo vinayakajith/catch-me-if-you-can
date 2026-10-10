@@ -18,7 +18,7 @@ async function start(page, name) {
   await page.goto(`${baseURL}/?test=1`, { waitUntil: 'networkidle' });
   await page.getByLabel('WHAT SHOULD WE CALL YOU, DETECTIVE?').fill(name);
   await page.getByRole('button', { name: /Let’s find dad/ }).click();
-  await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing', { timeout: 20000 });
+  await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing', undefined, { timeout: 20000 });
   await page.getByRole('button', { name: 'Dismiss guidance' }).click();
 }
 
@@ -49,7 +49,7 @@ async function commode(page, mobile) {
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score), 0, 'Opening does not score');
   await page.waitForTimeout(500);
   await page.screenshot({ path: new URL(mobile ? 'mobile-commode.png' : 'desktop-commode.png', artifacts).pathname });
-  await tapWorld(page, { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h * .3 }, mobile);
+  await tapWorld(page, await page.evaluate(id => window.__huntTest.face(id), slot.id), mobile);
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().player.score === 1);
   await page.screenshot({ path: new URL(mobile ? 'mobile-catch.png' : 'desktop-catch.png', artifacts).pathname });
 }
@@ -64,7 +64,7 @@ async function finishHunt(page) {
       await page.waitForFunction(id => window.__huntTest.session.getSnapshot().opened.includes(id), slot.id);
       await page.waitForTimeout(450);
     }
-    await tapWorld(page, slot.mode === 'search' ? { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h * .3 } : { x: slot.hit.x + slot.hit.w / 2, y: slot.hit.y + slot.hit.h / 2 });
+    await tapWorld(page, slot.mode === 'search' ? await page.evaluate(id => window.__huntTest.face(id), slot.id) : { x: slot.hit.x + slot.hit.w / 2, y: slot.hit.y + slot.hit.h / 2 });
     await page.waitForFunction(id => window.__huntTest.session.getSnapshot().targets.some(t => t.slotId === id && t.claimedBy), slot.id);
   }
   await page.getByRole('heading', { name: 'Absolutely dad-icated.' }).waitFor();

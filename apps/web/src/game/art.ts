@@ -43,4 +43,7 @@ export function propSvg(kind: PropKind, open = false): string {
 
 export const hunterSvg = svg(`<ellipse cx="81" cy="145" rx="30" ry="9" fill="#403d33" opacity=".18" stroke="none"/>${rect(52, 116, 22, 28, '#4d6e67', 8)}${rect(87, 116, 22, 28, '#4d6e67', 8)}${rect(42, 72, 76, 55, '#e8aa4f', 21)}<path d="M46 93l-15 24m83-24l16 21" fill="none" stroke="#c99069" stroke-width="15"/>${ellipse(79, 52, 34, 35, '#dba77a')}<path d="M46 45Q37 7 82 12q40 1 33 35l-14-9-21 4-25-6z" fill="#4c473c"/>${ellipse(65, 54, 3, 4, '#393b34')}${ellipse(93, 54, 3, 4, '#393b34')}<path d="M72 72q9 7 18-1" fill="none"/><path d="M70 90h21v22H70z" fill="#f4d489" stroke="none"/>`);
 
+// Foreground half of the seat: the revealed dad sits behind this lip, in the bowl.
+export const toiletRimSvg = svg('<path d="M28 80A52 47 0 0 0 132 80L115 82A35 32 0 0 1 45 82Z" fill="#f7f1dd"/>');
+
 export const svgUri = (source: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;

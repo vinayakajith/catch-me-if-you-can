@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BALAJI, HOUSE, canReach, contains, distance, findPath, type ActionResult, type HidingSlot, type HuntSession, type Point } from '@father-hunter/game-core';
-import { hunterSvg, propSvg, svgUri } from './art';
+import { hunterSvg, propSvg, svgUri, toiletRimSvg } from './art';
 
 export interface GameBridge {
   session: HuntSession;
@@ -18,6 +18,7 @@ export class HouseScene extends Phaser.Scene {
   private bridge: GameBridge;
   private hunter!: Phaser.GameObjects.Image;
   private props = new Map<string, Phaser.GameObjects.Image>();
+  private rims = new Map<string, Phaser.GameObjects.Image>();
   private dads = new Map<string, Phaser.GameObjects.Image>();
   private fog = new Map<string, Phaser.GameObjects.Rectangle>();
   private reacted = new Set<string>();
@@ -36,6 +37,7 @@ export class HouseScene extends Phaser.Scene {
   preload() {
     this.load.image('balaji-source', BALAJI.atlas);
     this.load.svg('hunter', svgUri(hunterSvg), { width: 160, height: 160 });
+    this.load.svg('toilet-rim', svgUri(toiletRimSvg), { width: 160, height: 160 });
     for (const kind of new Set(HOUSE.slots.map(s => s.kind))) {
       this.load.svg(kind, svgUri(propSvg(kind)), { width: 160, height: 160 });
       this.load.svg(`${kind}-open`, svgUri(propSvg(kind, true)), { width: 160, height: 160 });
@@ -52,6 +54,7 @@ export class HouseScene extends Phaser.Scene {
       const { prop: p } = slot;
       const prop = this.add.image(p.x + p.w / 2, p.y + p.h / 2, slot.kind).setDisplaySize(p.w, p.h).setDepth(p.y + p.h);
       this.props.set(slot.id, prop);
+      if (slot.kind === 'toilet') this.rims.set(slot.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, 'toilet-rim').setDisplaySize(p.w, p.h).setDepth(1501).setVisible(false));
       const dad = this.add.image(slot.target.x, slot.target.y, 'balaji', 1).setDisplaySize(78, 78).setDepth(p.y - 1).setVisible(false);
       // Frame-relative cropping works in both Phaser 4 renderers. Keep only a
       // glimpse above the furniture until this hiding place is opened.
@@ -88,6 +91,7 @@ export class HouseScene extends Phaser.Scene {
       // Development-only browser test access; never present in production builds.
       (window as unknown as { __huntTest: unknown }).__huntTest = { session: this.bridge.session, scene: this,
         tap: (p: Point) => this.tap(p), walk: (p: Point) => this.walkTo(p),
+        face: (id: string) => { const dad = this.dads.get(id)!; return { x: dad.x, y: dad.y }; },
         screen: (p: Point) => ({ x: (p.x - this.cameras.main.worldView.x) * this.cameras.main.zoom, y: (p.y - this.cameras.main.worldView.y) * this.cameras.main.zoom }),
         slots: HOUSE.slots,
       };
@@ -148,7 +152,7 @@ export class HouseScene extends Phaser.Scene {
   }
 
   private dadPoint(slot: HidingSlot): Point {
-    return this.opened.has(slot.id) ? { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h * .3 } : slot.target;
+    return this.opened.has(slot.id) ? { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h * (slot.kind === 'toilet' ? .49 : .3) } : slot.target;
   }
 
   private tap(point: Point) {
@@ -200,9 +204,11 @@ export class HouseScene extends Phaser.Scene {
       const dad = this.dads.get(slot.id)!;
       if (state.opened.includes(slot.id) && !this.opened.has(slot.id)) {
         this.opened.add(slot.id); this.props.get(slot.id)!.setTexture(`${slot.kind}-open`);
+        this.rims.get(slot.id)?.setVisible(true);
         if (target && !target.claimedBy) {
           dad.setCrop(); const p = this.dadPoint(slot);
           dad.setPosition(p.x, p.y).setDepth(1500).setFrame(2).setVisible(true);
+          if (slot.kind === 'toilet') dad.setDisplaySize(64, 64).setCrop(0, 0, dad.width, dad.height * .72);
           if (!this.bridge.reducedMotion) this.tweens.add({ targets: dad, y: { from: p.y + 20, to: p.y }, duration: 360, ease: 'Back.Out' });
         }
       }
