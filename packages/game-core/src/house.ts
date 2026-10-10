@@ -78,8 +78,8 @@ export const HOUSE: HouseDefinition = {
   spawn: { x: 740, y: 550 },
 };
 
-export const BALAJI: CharacterPack = { id: 'sample-balaji', name: 'Balaji', atlas: '/assets/balaji-expressions.png', columns: 3, rows: 2,
-  expressions: { normal: 0, hiding: 1, surprised: 2, caught: 3, crying: 4, defeated: 5 } };
+export const BALAJI: CharacterPack = { id: 'sample-balaji', name: 'Balaji', atlas: '/assets/balaji-heads.png', columns: 3, rows: 2,
+  expressions: { serious: 0, grin: 1, laugh: 2, giggle: 3, bonked: 4, dizzy: 5 } };
 
 export const contains = (r: Rect, p: Point, margin = 0) => p.x >= r.x - margin && p.x <= r.x + r.w + margin && p.y >= r.y - margin && p.y <= r.y + r.h + margin;
 export const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);

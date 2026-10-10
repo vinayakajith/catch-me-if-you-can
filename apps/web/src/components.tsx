@@ -5,9 +5,9 @@ export function Brand({ onClick }: { onClick?: () => void }) {
   return <button type="button" className="brand" onClick={onClick} aria-label="Father Hunter home"><img src="/favicon.svg" alt="" width="39" height="39" /><span>father<span className="brand-light">hunter</span><span className="brand-dot">.</span></span></button>;
 }
 
-const expressionOrder: Expression[] = ['normal', 'hiding', 'surprised', 'caught', 'crying', 'defeated'];
+const expressionOrder: Expression[] = ['serious', 'grin', 'laugh', 'giggle', 'bonked', 'dizzy'];
 export function Dad({ expression = 0, className = '', character = BALAJI }: { expression?: number; className?: string; character?: CharacterPack }) {
-  const mood = expressionOrder[expression] ?? 'normal', frame = character.expressions[mood];
+  const mood = expressionOrder[expression] ?? 'serious', frame = character.expressions[mood];
   return <div role="img" aria-label={`${character.name}, ${mood}`} className={`dad-portrait ${className}`} style={{ backgroundImage: `url("${character.atlas}")`, backgroundSize: `${character.columns * 100}% ${character.rows * 100}%`, backgroundPosition: `${frame % character.columns * 100 / Math.max(1, character.columns - 1)}% ${Math.floor(frame / character.columns) * 100 / Math.max(1, character.rows - 1)}%` }} />;
 }
 

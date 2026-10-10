@@ -1,8 +1,6 @@
 import { BALAJI } from './house.ts';
 import type { CaseStory, CharacterPack } from './types.ts';
 
-// Names and art travel together. A generated pack can replace the sample without
-// changing the intro, house, HUD, or results. Never bake a name into the artwork.
 export function createFatherProfile(name: string, art: CharacterPack = BALAJI): CharacterPack {
   return { ...art, name: name.trim().replace(/\s+/g, ' ').slice(0, 32) || BALAJI.name, expressions: { ...art.expressions } };
 }
@@ -10,11 +8,13 @@ export function createFatherProfile(name: string, art: CharacterPack = BALAJI): 
 export function createTimeMachineCase(father: string, detective: string): CaseStory {
   return {
     id: 'time-machine', title: `The ${father} Incident`, stamp: 'TEMPORAL SHITSHOW',
-    story: `Dr. ${father} walked into his homemade time machine. Six hyperactive idiots came out. The government sent Detective ${detective} with one sack.`,
+    story: `Dr. ${father}, desi witch-scientist, put a broom engine in a time machine. Now laughing copies of him are loose. The government sent Detective ${detective} with a stick, a sack and three minutes.`,
     beats: [
-      { id: 'experiment', kicker: '02:13 AM · ABSOLUTELY NO SUPERVISION', title: `Dr. ${father}. Unsupervised.`, text: 'He built a time machine to win an argument from 1998. Then the idiot climbed in.' },
-      { id: 'chaos', kicker: 'THE EXPERIMENT WAS TECHNICALLY A SUCCESS', title: 'One dad in. Six lunatics out.', text: 'One stole a pitchfork. Two are chasing each other. Nobody knows why they’re laughing. All six have escaped into the house.' },
-      { id: 'dispatch', kicker: 'GOVERNMENT BUREAU OF TEMPORAL NONSENSE', title: `Detective ${detective}, you’re up.`, text: `Six copies of ${father} are loose. The government sent you with one sack. Put all six in the bloody bag.` },
+      { id: 'experiment', kicker: '02:13 AM · PEER REVIEW: HIS OWN WHATSAPP GROUP', title: `Dr. ${father}. Witch-scientist.`, text: 'A pressure cooker. A broom engine. A time machine. He’s going back to 1998 to prove his wife wrong.' },
+      { id: 'entrance', kicker: 'SAFETY OFFICER: ALSO HIM', title: '“I know what I’m doing.”', text: 'Lungi secured. Common sense missing. He presses “yesterday” and walks straight in.' },
+      { id: 'chaos', kicker: 'THE MACHINE HAS SELECTED: MORE DAD', title: 'Oh, for fuck’s sake.', text: 'The machine can’t send him back. So it keeps sending him out. Every copy has his face and absolutely none of his shame.' },
+      { id: 'escape', kicker: 'CONTAINMENT STATUS: LAUGHING AT YOU', title: 'The house is now his problem.', text: 'One steals the broom. The rest cram themselves into household appliances. All of them think this is fucking hilarious.' },
+      { id: 'dispatch', kicker: 'GOVERNMENT BUREAU OF TEMPORAL NONSENSE', title: `Detective ${detective}, you’re up.`, text: `Your equipment: one stick, one sack. Your deadline: three minutes. Bag as many ${father}s as you can. The overtime request has already been rejected.` },
     ],
   };
 }

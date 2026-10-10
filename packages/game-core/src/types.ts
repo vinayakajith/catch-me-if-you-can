@@ -11,10 +11,10 @@ export interface HidingSlot extends HouseProp {
   peek: { visibleMs: number; hiddenMs: number };
 }
 export interface HouseDefinition { id: string; width: number; height: number; rooms: RoomDefinition[]; passages: Rect[]; props: HouseProp[]; slots: HidingSlot[]; spawn: Point }
-export type Expression = 'normal' | 'hiding' | 'surprised' | 'caught' | 'crying' | 'defeated';
+export type Expression = 'serious' | 'grin' | 'laugh' | 'giggle' | 'bonked' | 'dizzy';
 export interface CharacterPack { id: string; name: string; atlas: string; columns: number; rows: number; expressions: Record<Expression, number> }
 export interface Target { id: string; slotId: string; claimedBy: string | null; claimedAt: number | null }
-export interface CaseBeat { id: 'experiment' | 'chaos' | 'dispatch'; kicker: string; title: string; text: string }
+export interface CaseBeat { id: 'experiment' | 'entrance' | 'chaos' | 'escape' | 'dispatch'; kicker: string; title: string; text: string }
 export interface CaseStory { id: string; title: string; story: string; stamp: string; beats: CaseBeat[] }
 export interface Activity { id: number; text: string; kind: 'catch' | 'search' | 'hint' | 'welcome'; at: number; slotId?: string }
 export interface HuntSnapshot {

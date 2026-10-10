@@ -68,7 +68,7 @@ export class HouseScene extends Phaser.Scene {
       this.props.set(item.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, `${item.kind}${open ? '-open' : ''}`).setDisplaySize(p.w, p.h).setDepth(p.y + p.h));
       if (!slot) continue;
       this.rims.set(slot.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, `${slot.kind}-front${open ? '-open' : ''}`).setDisplaySize(p.w, p.h).setDepth(p.y + p.h + 2));
-      const dad = this.add.image(slot.target.x, slot.target.y, 'father', father.expressions.hiding).setDisplaySize(slot.pose.width, slot.pose.height).setAngle(slot.pose.angle).setDepth(p.y + p.h + 1).setVisible(false);
+      const dad = this.add.image(slot.target.x, slot.target.y, 'father', father.expressions.laugh).setDisplaySize(slot.pose.width, slot.pose.height).setAngle(slot.pose.angle).setDepth(p.y + p.h + 1).setVisible(false);
       dad.setCrop(0, 0, dad.width, dad.height * slot.pose.crop);
       this.dads.set(slot.id, dad);
     }
@@ -245,7 +245,7 @@ export class HouseScene extends Phaser.Scene {
       const progress = revealed ? 1 : slot.mode === 'peek' ? peekProgress(state.seed, slot, now - state.startedAt) : 0;
       dad.setVisible(!!target && state.status === 'playing' && state.player.roomId === slot.roomId && progress > 0);
       if (!dad.visible) continue;
-      dad.setFrame(revealed ? state.father.expressions.surprised : state.father.expressions.hiding).setAlpha(this.bridge.reducedMotion ? progress : Math.min(1, progress * 3));
+      dad.setFrame(revealed ? state.father.expressions.giggle : state.father.expressions.laugh).setAlpha(this.bridge.reducedMotion ? progress : Math.min(1, progress * 3));
       const upsideDown = slot.pose.angle === 180;
       dad.setPosition(slot.target.x, slot.target.y + (this.bridge.reducedMotion ? 0 : (1 - progress) * (upsideDown ? -14 : 14)));
       // Different silhouettes: a squash in a cushion, a long spring dad in a box.
@@ -258,7 +258,7 @@ export class HouseScene extends Phaser.Scene {
     const dad = this.dads.get(slot.id)!;
     this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 };
     this.capturing = { slotId: slot.id, from: { x: dad.x, y: dad.y }, startedAt: Date.now(), score: this.bridge.session.getSnapshot().player.score };
-    dad.setCrop().setFrame(this.bridge.session.getSnapshot().father.expressions.surprised).setAlpha(1).setDepth(2100).setVisible(true);
+    dad.setCrop().setFrame(this.bridge.session.getSnapshot().father.expressions.giggle).setAlpha(1).setDepth(2100).setVisible(true);
     this.destination.setVisible(false);
   }
 
@@ -277,7 +277,7 @@ export class HouseScene extends Phaser.Scene {
       const grab = Math.min(1, p / .42), plop = Math.max(0, (p - .42) / .58);
       const ease = 1 - Math.pow(1 - grab, 3);
       dad.setPosition(Phaser.Math.Linear(capture.from.x, hand.x, ease), Phaser.Math.Linear(capture.from.y, hand.y, ease));
-      dad.setAngle(slot.pose.angle * (1 - ease) + plop * 24).setFrame(p < .38 ? expressions.surprised : expressions.crying);
+      dad.setAngle(slot.pose.angle * (1 - ease) + plop * 24).setFrame(p < .38 ? expressions.giggle : expressions.bonked);
       dad.setDisplaySize((slot.pose.width + 8 * Math.sin(grab * Math.PI)) * (1 - plop * .88), (slot.pose.height + 23 * Math.sin(grab * Math.PI)) * (1 - plop * .88));
       if (plop > 0) dad.setPosition(Phaser.Math.Linear(hand.x, this.sack.x, plop), Phaser.Math.Linear(hand.y, this.sack.y - this.sack.displayHeight * .75, plop) - Math.sin(plop * Math.PI) * 26);
       if (p > .4 && p < .82) {

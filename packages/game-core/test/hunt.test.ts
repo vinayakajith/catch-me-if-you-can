@@ -48,11 +48,11 @@ test('a renamed scientist is used in the case and catch events, with independent
   let now = 100_000;
   const father = createFatherProfile('  Suresh   Kumar  ', { ...BALAJI, id: 'custom', atlas: '/generated/dad.png' });
   const session = new LocalHuntSession('Vinayak', seedWith('bathroom-toilet'), () => now, true, father);
-  father.name = 'Changed elsewhere'; father.expressions.crying = 99;
+  father.name = 'Changed elsewhere'; father.expressions.bonked = 99;
   const state = session.getSnapshot();
   assert.equal(state.father.name, 'Suresh Kumar');
   assert.equal(state.father.atlas, '/generated/dad.png');
-  assert.equal(state.father.expressions.crying, BALAJI.expressions.crying);
+  assert.equal(state.father.expressions.bonked, BALAJI.expressions.bonked);
   assert.ok(state.case.story.includes('Suresh Kumar') && state.case.story.includes('Vinayak'));
   assert.equal(JSON.stringify(state.case).includes('Balaji'), false);
   const slot = HOUSE.slots.find(s => s.id === 'bathroom-toilet')!;
