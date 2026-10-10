@@ -13,6 +13,7 @@ export interface RoomPlayer {
 }
 export interface RoomRecord {
   id: string; owner: string; key: string; revision: number; father: CharacterPack;
+  creationFingerprint?: string;
   createdAt: number; expiresAt: number; resultsExpireAt: number; mix: PlacementMix;
   players: RoomPlayer[]; events: CatchEvent[]; cursor: number; cleaned: boolean;
 }

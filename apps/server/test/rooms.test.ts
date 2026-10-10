@@ -124,6 +124,23 @@ test('room members share a copied atlas beyond original-pack expiry; source rema
     await guest.request('POST', `/api/rooms/${view.room.id}/join`, { name: 'Vinayak' });
     f.advance(2000); await f.server.jobs.cleanup(); assert.equal((await guest.request('GET', atlas)).statusCode, 200);
     assert.equal((await guest.request('GET', `/api/characters/${job.id}/assets/source.jpg`)).statusCode, 404);
-    f.set(view.room.expiresAt); assert.equal((await guest.request('GET', atlas)).statusCode, 410);
+    f.set(view.room.expiresAt); await f.server.rooms.cleanup();
+    assert.equal((await guest.request('GET', atlas)).statusCode, 200, 'Closed-room artwork is retained for members');
+    const outsider = f.client();
+    assert.equal((await outsider.request('POST', '/api/rooms', { name: 'Thief', fatherName: 'Ajith', sourceRoomId: view.room.id })).statusCode, 403);
+    assert.equal((await outsider.request('GET', `/api/rooms/${view.room.id}`)).json().reusableFather, null);
+    const key = randomUUID(), data = { name: 'Vinayak', fatherName: 'Ajith', sourceRoomId: view.room.id };
+    const children = await Promise.all([guest.request('POST', '/api/rooms', data, key), guest.request('POST', '/api/rooms', data, key)]);
+    assert.ok(children.every(r => r.statusCode === 200), children.map(r => r.body).join(' '));
+    const child = children[0].json() as RoomView;
+    assert.equal(child.room.id, children[1].json().room.id); assert.notEqual(child.room.id, view.room.id);
+    assert.equal(child.room.expiresAt - f.now(), EXPIRY_MS); assert.equal(child.room.playerCount, 1);
+    assert.equal(child.standings[0].bestScore, 0); assert.equal(child.me!.name, 'Vinayak');
+    assert.equal((await guest.request('POST', '/api/rooms', { ...data, fatherName: 'Changed' }, key)).statusCode, 409);
+    assert.equal((await guest.request('POST', '/api/rooms', { ...data, characterId: 'sample-balaji' })).statusCode, 400);
+    f.set(view.room.resultsExpireAt); await f.server.rooms.cleanup();
+    assert.equal((await guest.request('GET', atlas)).statusCode, 404);
+    assert.equal((await guest.request('GET', child.reusableFather!.atlas)).statusCode, 200, 'Parent cleanup cannot delete a child’s copy');
+    assert.equal((await guest.request('POST', '/api/rooms', data)).statusCode, 404);
   } finally { await f.close(); }
 });

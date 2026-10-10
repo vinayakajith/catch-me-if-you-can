@@ -44,6 +44,7 @@ export interface PlayerStanding {
 export interface CatchEvent { id: number; playerId: string; attemptId: string; text: string; at: number }
 export interface RoomView {
   room: GameRoomInfo; me: { id: string; name: string } | null; father: CharacterPack | null;
+  reusableFather: CharacterPack | null;
   standings: PlayerStanding[]; events: CatchEvent[]; cursor: number; revision: number; serverNow: number;
   attempt: { id: string; snapshot: HuntSnapshot; ack: number } | null;
 }

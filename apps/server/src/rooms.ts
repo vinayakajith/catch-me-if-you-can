@@ -48,10 +48,21 @@ export class Rooms {
   }
   private session(player: RoomPlayer) { return player.attempt ? LocalHuntSession.restore(player.attempt.checkpoint, this.clock) : null; }
   async create(owner: string, data: Record<string, unknown>, idem: string): Promise<RoomView> {
-    const old = await this.store.find(owner, idem); if (old) return this.view(old.id, owner);
-    const playerName = name(data.name), fatherName = name(data.fatherName, 32), id = randomUUID();
+    const playerName = name(data.name), fatherName = name(data.fatherName, 32);
+    if (data.sourceRoomId !== undefined && (typeof data.sourceRoomId !== 'string' || data.characterId !== undefined)) throw new JobError(400, 'Choose one character for the new game.');
+    const fingerprint = hash(JSON.stringify([playerName, fatherName, data.sourceRoomId ?? null, data.characterId ?? null]));
+    const old = await this.store.find(owner, idem);
+    if (old) { if (old.creationFingerprint && old.creationFingerprint !== fingerprint) throw new JobError(409, 'This creation request changed. Start a fresh game.'); return this.view(old.id, owner); }
+    const id = randomUUID();
     let father: CharacterPack = createFatherProfile(fatherName, BALAJI);
-    if (data.characterId !== 'sample-balaji') {
+    if (typeof data.sourceRoomId === 'string') {
+      const source = await this.get(data.sourceRoomId); this.member(source, owner);
+      if (!source.father.atlas) throw new JobError(410, 'This character is no longer available. Choose another photo or sample artwork.');
+      if (source.father.atlas.startsWith('/api/rooms/')) {
+        await this.assets.write(id, 'atlas.png', await this.assets.read(source.id, 'atlas.png'));
+        father = createFatherProfile(fatherName, { ...source.father, atlas: `/api/rooms/${id}/assets/atlas.png` });
+      }
+    } else if (data.characterId !== 'sample-balaji') {
       if (typeof data.characterId !== 'string') throw new JobError(400, `Choose ${fatherName}’s character for this room.`);
       const job = this.jobs.get(data.characterId, owner), preview = this.jobs.view(job).preview;
       if (job.status !== 'ready' || !preview) throw new JobError(409, `Finish making ${fatherName} before creating his room.`);
@@ -59,10 +70,10 @@ export class Rooms {
       father = createFatherProfile(fatherName, { ...preview, atlas: `/api/rooms/${id}/assets/atlas.png` });
     }
     const now = this.clock(); father.expiresAt = now + EXPIRY_MS;
-    const room: RoomRecord = { id, owner, key: idem, revision: 1, father, createdAt: now, expiresAt: now + EXPIRY_MS, resultsExpireAt: now + EXPIRY_MS + RESULTS_MS,
+    const room: RoomRecord = { id, owner, key: idem, creationFingerprint: fingerprint, revision: 1, father, createdAt: now, expiresAt: now + EXPIRY_MS, resultsExpireAt: now + EXPIRY_MS + RESULTS_MS,
       mix: placementMix(placeTargets(id)), players: [{ id: randomUUID(), owner, name: playerName, joinedAt: now, bestScore: 0, attempt: null }], events: [], cursor: 0, cleaned: false };
     try {
-      if (!await this.store.insert(room)) { await this.assets.remove(id); return this.view((await this.store.find(owner, idem))!.id, owner); }
+      if (!await this.store.insert(room)) { await this.assets.remove(id); return this.create(owner, data, idem); }
     } catch (error) { await this.assets.remove(id); throw error; }
     return this.view(id, owner);
   }
@@ -87,6 +98,7 @@ export class Rooms {
     const session = me && !closed ? this.session(me) : null; session?.tick();
     return { room: { id, fatherName: room.father.name, createdAt: room.createdAt, expiresAt: room.expiresAt, resultsExpireAt: room.resultsExpireAt, status: closed ? 'closed' : 'open', playerCount: room.players.length, capacity: MAX_PLAYERS, targetCount: Object.values(room.mix).reduce((a, b) => a + b, 1) },
       me: me ? { id: me.id, name: me.name } : null, father: me && !closed ? room.father : null,
+      reusableFather: me && room.father.atlas ? { ...room.father, expiresAt: room.resultsExpireAt } : null,
       standings: me || closed ? standings : [], events: me && !closed ? room.events.filter(e => e.id > after) : [], cursor: room.cursor, revision: room.revision, serverNow: now,
       attempt: session && me?.attempt ? { id: me.attempt.id, snapshot: session.getSnapshot(), ack: me.attempt.ack } : null };
   }
@@ -152,16 +164,15 @@ export class Rooms {
     return { view: await this.view(id, owner), results };
   }
   async asset(id: string, owner: string, filename: string) {
-    const room = await this.get(id); this.open(room); this.member(room, owner);
+    const room = await this.get(id); this.member(room, owner);
     if (filename !== 'atlas.png' || !room.father.atlas.startsWith('/api/rooms/')) throw new JobError(404, 'Image not found.');
     return this.assets.read(id, filename);
   }
   async cleanup() {
     for (const room of await this.store.list()) {
       if (this.clock() < room.expiresAt) continue;
-      await this.assets.remove(room.id);
-      if (this.clock() >= room.resultsExpireAt) { await this.store.remove(room.id); continue; }
-      if (!room.cleaned) await this.change(room.id, current => { current.cleaned = true; current.events = []; current.father.atlas = ''; for (const p of current.players) p.attempt = null; });
+      if (this.clock() >= room.resultsExpireAt) { await this.assets.remove(room.id); await this.store.remove(room.id); continue; }
+      if (!room.cleaned) await this.change(room.id, current => { current.cleaned = true; current.events = []; for (const p of current.players) p.attempt = null; });
     }
   }
   async close() { await this.store.close(); }
@@ -175,7 +186,7 @@ export function registerRooms(app: FastifyInstance, rooms: Rooms) {
     const configured = process.env.FATHER_HUNTER_SHARE_ORIGIN;
     const localhost = ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
     if (localhost && addresses[0]) current.hostname = addresses[0];
-    return { shareOrigin: configured || current.origin, lanAvailable: !localhost || addresses.length > 0 || !!configured };
+    return { shareOrigin: configured || current.origin, public: !!configured && configured.startsWith('https://'), lanAvailable: !localhost || addresses.length > 0 || !!configured };
   });
   app.post('/api/rooms', { bodyLimit: 4096 }, async request => rooms.create(identity(request), body(request.body), key(request.headers['idempotency-key'])));
   app.get<{ Params: Params }>('/api/rooms/:id', async request => rooms.view(request.params.id, identity(request)));
