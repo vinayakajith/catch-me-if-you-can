@@ -30,7 +30,7 @@ export async function normalizeHead(input: Buffer): Promise<{ image: Buffer; ski
     if (x < 3 || y < 3 || x > width - 4 || y > height - 4) edge++;
     // Sample the central cheek region, exclude ink, neutral glasses and highlights.
     const [r, g, b] = pixels.subarray(offset, offset + 3);
-    if (alpha > 240 && x > width * .3 && x < width * .7 && y > height * .35 && y < height * .75 && r > g && g > b && r > 60 && r - b > 15 && r < 250) {
+    if (alpha > 240 && x > width * .3 && x < width * .7 && y > height * .35 && y < height * .75 && r > g && g > b && r > 60 && r - b > 15 && g < 245) {
       const key = [r, g, b].map(c => Math.round(c / 12) * 12).join(','); colours.set(key, (colours.get(key) || 0) + 1);
     }
   }

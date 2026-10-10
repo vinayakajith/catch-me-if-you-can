@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright';
-import { spawn } from 'node:child_process';
+import { createServer } from 'vite';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildApp } from '../apps/server/src/app.ts';
 import { FixtureProvider, portrait } from '../apps/server/test/fixtures.ts';
 
-const baseURL = process.env.FATHER_HUNTER_URL || 'http://127.0.0.1:5173';
 const directory = await mkdtemp(join(tmpdir(), 'father-browser-'));
 const provider = new FixtureProvider(); provider.delayMs = 120;
 const { app, jobs } = await buildApp({ directory, provider, retryDelayMs: 1 });
@@ -15,14 +15,13 @@ const artifacts = new URL('../artifacts/', import.meta.url); await mkdir(artifac
 let browser, vite;
 const errors = [];
 try {
-  let available = false;
-  try { available = (await fetch(baseURL)).ok; } catch {}
-  if (!available) {
-    // Never start the paid provider in a browser test.
-    vite = spawn('npm', ['run', 'dev:web'], { stdio: 'ignore' });
-    for (let i = 0; i < 50; i++) { await new Promise(r => setTimeout(r, 200)); try { if ((await fetch(baseURL)).ok) { available = true; break; } } catch {} }
-  }
-  assert.ok(available, 'Vite is reachable');
+  // Exercise the actual Vite proxy and HTTP cookie/origin handling on isolated
+  // ports. This fixture API never loads the paid provider or development key.
+  const apiAddress = await app.listen({ host: '127.0.0.1', port: 0 });
+  vite = await createServer({ root: fileURLToPath(new URL('../apps/web', import.meta.url)), logLevel: 'error',
+    server: { host: '127.0.0.1', port: 0, strictPort: false, proxy: { '/api': { target: apiAddress } } } });
+  await vite.listen();
+  const baseURL = `http://127.0.0.1:${vite.httpServer.address().port}`;
   browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined });
   for (const mobile of [false, true]) {
     const context = await browser.newContext(mobile ? { ...devices['iPhone 13'], viewport: { width: 390, height: 664 }, reducedMotion: 'reduce' } : { viewport: { width: 1440, height: 1000 } });
@@ -31,10 +30,9 @@ try {
     let loseFinalizeResponse = true, loseUploadResponse = true;
     await page.route('**/api/**', async route => {
       const request = route.request(), parsed = new URL(request.url());
-      const response = await app.inject({ method: request.method(), url: parsed.pathname + parsed.search, headers: { ...request.headers(), host: new URL(baseURL).host }, payload: request.postDataBuffer() || undefined });
-      if (request.method() === 'POST' && parsed.pathname === '/api/characters' && loseUploadResponse) { loseUploadResponse = false; await route.abort(); return; }
-      if (parsed.pathname.endsWith('/finalize') && loseFinalizeResponse) { loseFinalizeResponse = false; await route.abort(); return; }
-      await route.fulfill({ status: response.statusCode, headers: Object.fromEntries(Object.entries(response.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : String(value)])), body: response.rawPayload });
+      if (request.method() === 'POST' && parsed.pathname === '/api/characters' && loseUploadResponse) { loseUploadResponse = false; const response = await route.fetch({ maxRetries: 0 }); assert.ok(response.ok()); await route.abort(); return; }
+      if (parsed.pathname.endsWith('/finalize') && loseFinalizeResponse) { loseFinalizeResponse = false; const response = await route.fetch({ maxRetries: 0 }); assert.ok(response.ok()); await route.abort(); return; }
+      await route.continue();
     });
     await page.goto(`${baseURL}/?test=1&seed=personal-dad`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: /Use your dad’s photo/ }).click();
@@ -90,5 +88,5 @@ try {
   }
   assert.deepEqual(errors, []);
 } finally {
-  await browser?.close(); vite?.kill('SIGTERM'); await app.close(); await rm(directory, { recursive: true, force: true });
+  await browser?.close(); await vite?.close(); await app.close(); await rm(directory, { recursive: true, force: true });
 }

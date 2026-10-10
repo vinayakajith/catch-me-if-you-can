@@ -114,6 +114,8 @@ test('all six fixture heads normalize; opaque, clipped and invalid uploads are r
   }
   await assert.rejects(normalizeHead(await portrait()), /transparent/);
   await assert.rejects(normalizePhoto(Buffer.from('<svg></svg>')), /clear JPG/);
+  const brightSkin = await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><ellipse cx="256" cy="256" rx="170" ry="180" fill="#ffa854"/></svg>')).png().toBuffer();
+  assert.equal((await normalizeHead(brightSkin)).skin, '#fca854', 'Bright skin must not be discarded as a white highlight');
   const original = await sharp(await portrait()).withMetadata({ orientation: 6 }).toBuffer();
   const normalized = await sharp(await normalizePhoto(original)).metadata();
   assert.equal(normalized.orientation, undefined); assert.equal(normalized.width, 800);
