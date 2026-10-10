@@ -7,9 +7,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildApp } from '../apps/server/src/app.ts';
 import { FixtureProvider, portrait } from '../apps/server/test/fixtures.ts';
+import { GenerationError } from '../apps/server/src/contracts.ts';
 
 const directory = await mkdtemp(join(tmpdir(), 'father-browser-'));
 const provider = new FixtureProvider(); provider.delayMs = 120;
+const generateFixture = provider.generate.bind(provider);
 const { app, jobs } = await buildApp({ directory, provider, retryDelayMs: 1 });
 const artifacts = new URL('../artifacts/', import.meta.url); await mkdir(artifacts, { recursive: true });
 let browser, vite;
@@ -55,7 +57,20 @@ try {
     await page.getByRole('button', { name: /Continue making your Dad/ }).click();
     await approve().waitFor(); assert.equal(provider.calls.length, before + 1, 'Refresh reuses base');
     await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-dad-approval.png`, artifacts).pathname });
+    let releaseBudget = false;
+    provider.generate = async input => {
+      if (provider.calls.length === before + 2 && !releaseBudget) {
+        provider.canAffordGeneration = false;
+        throw new GenerationError('development_budget', 'Photo generation is paused while budget is reserved.', { canRetry: true });
+      }
+      return generateFixture(input);
+    };
     await approve().evaluate(button => { button.click(); button.click(); });
+    await page.getByText('2 completed faces are saved.', { exact: true }).waitFor();
+    assert.equal(provider.calls.length, before + 2);
+    assert.equal(await page.getByRole('button', { name: 'Retry this face' }).count(), 0);
+    releaseBudget = true; provider.canAffordGeneration = true;
+    await page.getByRole('button', { name: 'Retry this face' }).click();
     await page.getByRole('button', { name: 'Use this Dad', exact: true }).waitFor({ timeout: 20000 });
     assert.equal(provider.calls.length, before + 6, 'Double approval creates just five edits');
     await page.locator('.palette-adjust summary').click();
@@ -84,7 +99,7 @@ try {
     assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.id), id, 'Replay keeps personalized pack');
     assert.equal(provider.calls.length, before + 6);
     await context.close();
-    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: crop, lost upload response + reload, approval, resume, six faces, palette, lost final response, personalized intro/hunt/replay`);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: crop, lost upload response + reload, approval, budget pause and recovery, six faces, palette, lost final response, personalized intro/hunt/replay`);
   }
   assert.deepEqual(errors, []);
 } finally {

@@ -83,6 +83,7 @@ export function CharacterCreator({ initialName, fresh = false, onReady, onClose,
         if (loadedNameFor.current !== next.id) { loadedNameFor.current = next.id; setName(next.name); }
         setJob(next); setConnectionError('');
         if (['uploading', 'queued', 'generating'].includes(next.status)) timer = setTimeout(poll, 1800);
+        else if (next.error?.code === 'development_budget') timer = setTimeout(poll, 3500);
       } catch (fault) {
         if (stopped) return;
         if (fault instanceof CharacterApiError && [404, 410].includes(fault.status)) {

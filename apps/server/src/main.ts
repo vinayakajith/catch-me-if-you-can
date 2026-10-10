@@ -1,11 +1,12 @@
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildApp } from './app.ts';
 import { OpenAIImageProvider } from './provider.ts';
 import { BudgetedImageProvider, DevelopmentBudget } from './budget.ts';
 
 const rawProvider = new OpenAIImageProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.FATHER_HUNTER_IMAGE_MODEL,
   quality: process.env.FATHER_HUNTER_IMAGE_QUALITY === 'medium' ? 'medium' : 'high' });
-const budget = new DevelopmentBudget(resolve('.father-hunter'));
+const budget = new DevelopmentBudget(fileURLToPath(new URL('../../../.father-hunter', import.meta.url)));
 const provider = new BudgetedImageProvider(rawProvider, budget);
 const { app } = await buildApp({ directory: resolve(process.env.FATHER_HUNTER_DATA_DIR || '.father-hunter'), provider,
   dailyJobs: Math.max(1, Number(process.env.FATHER_HUNTER_DAILY_JOBS) || 20) });

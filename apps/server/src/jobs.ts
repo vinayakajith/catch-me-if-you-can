@@ -40,8 +40,9 @@ export class CharacterJobs {
   view(job: CharacterJob): CharacterJobView {
     const remainingAttempts = Math.max(0, MAX_ATTEMPTS - job.attempts);
     const idle = !['uploading', 'queued', 'generating', 'ready', 'expired'].includes(job.status);
-    const retryableExpressions = idle && remainingAttempts ? EXPRESSIONS.filter(expression => (job.stepAttempts[expression] ?? 0) < 2 && (job.baseApproved ? expression !== 'grin' && (Boolean(job.completed[expression]) || expression === job.currentExpression) : expression === 'grin')) : [];
-    const error = job.error && { ...job.error, canRetry: job.error.canRetry && remainingAttempts > 0 && (job.stepAttempts[job.currentExpression ?? 'grin'] ?? 0) < 2 };
+    const affordable = this.provider.canAffordGeneration !== false;
+    const retryableExpressions = idle && affordable && remainingAttempts ? EXPRESSIONS.filter(expression => (job.stepAttempts[expression] ?? 0) < 2 && (job.baseApproved ? expression !== 'grin' && (Boolean(job.completed[expression]) || expression === job.currentExpression) : expression === 'grin')) : [];
+    const error = job.error && { ...job.error, canRetry: affordable && (job.error.code === 'development_budget' || job.error.canRetry) && remainingAttempts > 0 && (job.stepAttempts[job.currentExpression ?? 'grin'] ?? 0) < 2 };
     return {
       id: job.id, name: job.name, status: job.status, completed: EXPRESSIONS.filter(e => job.completed[e]), currentExpression: job.currentExpression,
       baseRevision: job.baseRevision, baseApproved: job.baseApproved, attempts: job.attempts, remainingAttempts, retryableExpressions,
@@ -87,7 +88,7 @@ export class CharacterJobs {
     const job = this.get(id, owner);
     if (revision !== job.baseRevision) throw new JobError(409, 'The preview changed. Check Dad’s latest face.');
     if (['uploading', 'queued', 'generating'].includes(job.status)) return job;
-    if (job.error && !job.error.canRetry) throw new JobError(409, job.error.message);
+    if (job.error && !this.view(job).error?.canRetry) throw new JobError(409, job.error.message);
     if (!this.view(job).retryableExpressions.includes(expression)) throw new JobError(409, 'This Dad has used his retry allowance. Use the existing preview or choose a new photo.');
     job.status = 'queued'; job.error = null; job.currentExpression = expression; this.store.save(job); this.kick(); return job;
   }
@@ -152,6 +153,9 @@ export class CharacterJobs {
       this.store.save(job);
     } catch (error) {
       const fault = error instanceof GenerationError ? error : new GenerationError('storage', 'Dad could not be saved. Your completed faces are safe; retry this step.', { canRetry: true });
+      // The budget rejected this step before any provider call. It is not an
+      // image attempt and must not consume the face's redraw allowance.
+      if (fault.code === 'development_budget') { job.attempts--; job.stepAttempts[expression] = Math.max(0, (job.stepAttempts[expression] ?? 1) - 1); }
       job.error = { code: fault.code, message: fault.code === 'invalid_art' ? 'This face came out cropped or without a clean background. We can redraw just this face.' : fault.message, canRetry: fault.canRetry, uncertain: fault.uncertain };
       const canAutoRetry = fault.automatic && job.attempts < MAX_ATTEMPTS && (job.stepAttempts[expression] ?? 0) < 2;
       job.status = fault.uncertain ? 'interrupted' : 'failed'; this.store.save(job);

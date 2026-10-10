@@ -6,6 +6,7 @@ export interface ImageProvider {
   readonly available: boolean;
   readonly testMode: boolean;
   readonly model: string;
+  readonly canAffordGeneration?: boolean;
   generate(input: { photo: Buffer; base?: Buffer; expression: Expression; correction?: string }): Promise<ImageResult>;
 }
 export interface CharacterJob {

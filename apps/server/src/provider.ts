@@ -1,7 +1,18 @@
 import OpenAI, { toFile } from 'openai';
+import sharp from 'sharp';
 import type { Expression } from '../../../packages/game-core/src/index.ts';
 import { GenerationError, type ImageProvider, type ImageResult } from './contracts.ts';
 import { headPrompt } from './prompts.ts';
+
+export async function validateImageRequest(input: { photo: Buffer; base?: Buffer }, prompt: string) {
+  if (Buffer.byteLength(prompt, 'utf8') > 4096) throw new GenerationError('request_limits', 'This image request exceeds the development prompt limit.');
+  for (const image of input.base ? [input.photo, input.base] : [input.photo]) {
+    const meta = await sharp(image, { limitInputPixels: 1_048_576 }).metadata().catch(() => null);
+    if (!meta?.width || !meta.height || meta.width > 1024 || meta.height > 1024 || (meta.pages ?? 1) > 1 || !['jpeg', 'png'].includes(meta.format ?? '')) {
+      throw new GenerationError('request_limits', 'This image request exceeds the development image limits.');
+    }
+  }
+}
 
 export class OpenAIImageProvider implements ImageProvider {
   readonly available: boolean;
@@ -11,7 +22,7 @@ export class OpenAIImageProvider implements ImageProvider {
   private quality: 'high' | 'medium';
   constructor(options: { apiKey?: string; model?: string; quality?: 'high' | 'medium' } = {}) {
     this.model = options.model || 'gpt-image-2.5-sunburst-2026-09-08';
-    if (!/^gpt-image-2\.5-(sunburst|flare)(-2026-09-08)?$/.test(this.model)) throw new Error('Development cost accounting supports GPT Image 2.5 Sunburst and Flare only.');
+    if (!/^gpt-image-2\.5-(sunburst|flare)-2026-09-08$/.test(this.model)) throw new Error('Development cost accounting requires a pinned GPT Image 2.5 September 2026 model.');
     this.quality = options.quality || 'high';
     this.available = Boolean(options.apiKey);
     this.client = options.apiKey ? new OpenAI({ apiKey: options.apiKey, maxRetries: 0, timeout: 180_000 }) : null;
@@ -19,10 +30,12 @@ export class OpenAIImageProvider implements ImageProvider {
   async generate(input: { photo: Buffer; base?: Buffer; expression: Expression; correction?: string }): Promise<ImageResult> {
     if (!this.client) throw new GenerationError('not_configured', 'Photo generation is not connected yet. You can still play with sample Balaji.');
     try {
+      const prompt = headPrompt(input.expression, Boolean(input.base), input.correction);
+      await validateImageRequest(input, prompt);
       const images = [await toFile(input.photo, 'reference.jpg', { type: 'image/jpeg' })];
       if (input.base) images.push(await toFile(input.base, 'approved-head.png', { type: 'image/png' }));
       const response = await this.client.images.edit({
-        model: this.model, image: images, prompt: headPrompt(input.expression, Boolean(input.base), input.correction),
+        model: this.model, image: images, prompt,
         size: '1024x1024', quality: this.quality, background: 'transparent', output_format: 'png', n: 1,
       });
       const data = response.data?.[0]?.b64_json;

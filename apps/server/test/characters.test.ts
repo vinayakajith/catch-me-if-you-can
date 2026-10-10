@@ -12,6 +12,7 @@ import { GenerationError } from '../src/contracts.ts';
 import { normalizeHead, normalizePhoto } from '../src/images.ts';
 import { FixtureProvider, portrait } from './fixtures.ts';
 import { buildApp } from '../src/app.ts';
+import { OpenAIImageProvider, validateImageRequest } from '../src/provider.ts';
 
 async function setup(t: { after: (fn: () => Promise<void>) => void }) {
   const directory = await mkdtemp(join(tmpdir(), 'father-hunter-'));
@@ -80,6 +81,41 @@ test('a stored in-flight request becomes interrupted after restart without anoth
   await jobs.initialize(); await jobs.idle();
   assert.equal(jobs.get(job.id, 'owner').status, 'interrupted'); assert.equal(provider.calls.length, 1);
   assert.equal(jobs.view(jobs.get(job.id, 'owner')).error?.uncertain, true);
+});
+
+test('budget pauses preserve retry allowance and resume only missing faces, including legacy failures', async t => {
+  const { jobs, provider, store, assets } = await setup(t);
+  const capped = provider as FixtureProvider & { canAffordGeneration: boolean };
+  capped.canAffordGeneration = true;
+  const generate = provider.generate.bind(provider);
+  provider.generate = async input => {
+    if (provider.calls.length === 2 && capped.canAffordGeneration) capped.canAffordGeneration = false;
+    if (!capped.canAffordGeneration) throw new GenerationError('development_budget', 'Waiting for budget headroom', { canRetry: true });
+    return generate(input);
+  };
+  const initial = await jobs.create('owner', 'budget-paused-job', 'Dad', await portrait()); await jobs.idle();
+  jobs.approve(initial.id, 'owner', 1); await jobs.idle();
+  let job = jobs.get(initial.id, 'owner');
+  assert.equal(job.status, 'failed'); assert.equal(job.attempts, 2); assert.equal(job.stepAttempts.laugh, 0);
+  assert.equal(jobs.view(job).error?.canRetry, false);
+  assert.throws(() => jobs.retry(job.id, 'owner', 'laugh', 1), /budget/);
+  const grin = await assets.read(job.id, 'grin.png'), serious = await assets.read(job.id, 'serious.png');
+  provider.generate = generate; capped.canAffordGeneration = true;
+  job.error!.canRetry = false; store.save(job); // Old code marked budget failures permanently unretryable.
+  assert.equal(jobs.view(job).error?.canRetry, true);
+  jobs.retry(job.id, 'owner', 'laugh', 1); await jobs.idle(); job = jobs.get(job.id, 'owner');
+  assert.equal(job.status, 'preview'); assert.equal(job.attempts, 6);
+  assert.deepEqual(provider.calls.map(call => call.expression), ['grin', 'serious', 'laugh', 'giggle', 'bonked', 'dizzy']);
+  assert.deepEqual(await assets.read(job.id, 'grin.png'), grin); assert.deepEqual(await assets.read(job.id, 'serious.png'), serious);
+});
+
+test('the paid request profile rejects oversized inputs, prompts and unpinned models before generation', async () => {
+  const input = { photo: await portrait() };
+  await validateImageRequest(input, 'A head');
+  await assert.rejects(validateImageRequest(input, 'x'.repeat(4097)), /prompt limit/);
+  const oversized = await sharp({ create: { width: 1025, height: 1024, channels: 3, background: '#ccc' } }).png().toBuffer();
+  await assert.rejects(validateImageRequest({ ...input, base: oversized }, 'A head'), /image limits/);
+  assert.throws(() => new OpenAIImageProvider({ model: 'gpt-image-2.5-sunburst' }), /pinned/);
 });
 
 test('restart recovers a saved upload and rejects an incomplete upload without generating twice', async t => {
