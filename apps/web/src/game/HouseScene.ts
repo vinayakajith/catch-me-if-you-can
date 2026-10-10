@@ -6,6 +6,7 @@ export interface GameBridge {
   session: HuntSession;
   movement: Point;
   reducedMotion: boolean;
+  inputEnabled: boolean;
   feedback(result: ActionResult): void;
   ready(): void;
   failed(message: string): void;
@@ -152,6 +153,7 @@ export class HouseScene extends Phaser.Scene {
   }
 
   private tap(point: Point) {
+    if (!this.bridge.inputEnabled) return;
     const state = this.bridge.session.getSnapshot();
     if (state.status !== 'playing') return;
     for (const slot of HOUSE.slots.filter(s => s.roomId === state.player.roomId)) {
@@ -231,6 +233,7 @@ export class HouseScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (!this.hunter || !this.loaded) return;
     this.bridge.session.tick();
+    if (!this.bridge.inputEnabled) { this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 }; this.destination.setVisible(false); return; }
     const k = this.keys;
     const keyDirection = { x: Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.LEFT.isDown), y: Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.UP.isDown) };
     let direction = this.bridge.movement.x || this.bridge.movement.y ? this.bridge.movement : keyDirection;

@@ -22,7 +22,7 @@ export function placeTargets(seed: string): Target[] {
   const selected: string[] = [];
   for (const room of HOUSE.rooms.filter(r => r.id !== 'hall')) {
     const slots = HOUSE.slots.filter(s => s.roomId === room.id);
-    selected.push(shuffle(slots.filter(s => s.mode === 'peek'))[0].id);
+    selected.push(room.id === 'living' && seed === 'welcome-home' ? 'living-sofa' : shuffle(slots.filter(s => s.mode === 'peek'))[0].id);
     // The commode reveal is a signature joke in this house, present on every run.
     selected.push(room.id === 'bathroom' ? 'bathroom-toilet' : shuffle(slots.filter(s => s.mode === 'search'))[0].id);
   }
@@ -37,15 +37,21 @@ export class LocalHuntSession implements HuntSession {
   private lastSecond = -1;
   private lastHintAt = -Infinity;
   private clock: () => number;
-  constructor(name: string, seed: string, clock: () => number = Date.now) {
+  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true) {
     this.clock = clock;
     const now = clock();
-    this.state = { id: `solo-${seed}`, seed, status: 'playing', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
+    this.state = { id: `solo-${seed}`, seed, status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
       player: { id: 'hunter-1', name: name.trim().slice(0, 24) || 'Detective', position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
       targets: placeTargets(seed), opened: [], search: null,
       activity: [{ id: 0, text: 'Balaji is missing. In twelve separate places.', kind: 'welcome', at: now }] };
   }
   getSnapshot = () => this.state;
+  start() {
+    if (this.state.status !== 'ready') return;
+    const now = this.clock();
+    this.state = { ...this.state, status: 'playing', startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, lastCatchAt: now, now };
+    this.emit();
+  }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   dispose() { this.listeners.clear(); }
   private emit() { this.listeners.forEach(f => f()); }

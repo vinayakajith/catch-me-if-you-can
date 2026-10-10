@@ -13,7 +13,7 @@ export interface CharacterPack { id: string; name: string; atlas: string; column
 export interface Target { id: string; slotId: string; claimedBy: string | null; claimedAt: number | null }
 export interface Activity { id: number; text: string; kind: 'catch' | 'search' | 'hint' | 'welcome'; at: number; slotId?: string }
 export interface HuntSnapshot {
-  id: string; seed: string; status: 'playing' | 'finished' | 'expired';
+  id: string; seed: string; status: 'ready' | 'playing' | 'finished' | 'expired';
   finishReason: 'complete' | 'timeout' | 'expired' | null;
   startedAt: number; endsAt: number; expiresAt: number; now: number; lastCatchAt: number;
   player: { id: string; name: string; position: Point; roomId: RoomId; score: number };
@@ -22,6 +22,7 @@ export interface HuntSnapshot {
 }
 export interface ActionResult { ok: boolean; message: string; kind: 'catch' | 'search' | 'hint' | 'error'; slotId?: string }
 export interface HuntSession {
+  start(): void;
   getSnapshot(): HuntSnapshot;
   subscribe(listener: () => void): () => void;
   move(direction: Point, deltaMs: number): void;

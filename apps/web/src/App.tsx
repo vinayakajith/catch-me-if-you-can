@@ -70,7 +70,7 @@ function Landing({ onStart }: { onStart: (name: string) => void }) {
 }
 
 function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }: { name: string; seed: string; preferences: Preferences; togglePreference: (key: keyof Preferences) => void; onLeave: () => void; onReplay: () => void }) {
-  const [session] = useState(() => new LocalHuntSession(name, seed));
+  const [session] = useState(() => new LocalHuntSession(name, seed, Date.now, false));
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [ready, setReady] = useState(false), [error, setError] = useState('');
   const [toast, setToast] = useState(''), [mapOpen, setMapOpen] = useState(false), [leaving, setLeaving] = useState(false), [help, setHelp] = useState(false);
@@ -82,7 +82,7 @@ function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }:
     showToast(result.kind === 'catch' ? `Balaji: “${result.message}”` : result.message);
     if (result.ok && result.kind === 'catch') playSound('catch', preferencesRef.current.sound);
   }, [showToast]);
-  const bridge = useMemo<GameBridge>(() => ({ session, movement: { x: 0, y: 0 }, reducedMotion: preferences.reducedMotion, feedback, ready: () => setReady(true), failed: setError }), [session, feedback]);
+  const bridge = useMemo<GameBridge>(() => ({ session, movement: { x: 0, y: 0 }, inputEnabled: true, reducedMotion: preferences.reducedMotion, feedback, ready: () => { session.start(); setReady(true); }, failed: setError }), [session, feedback]);
   bridge.reducedMotion = preferences.reducedMotion;
   const latestActivity = state.activity[0];
   useEffect(() => {
@@ -97,7 +97,8 @@ function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }:
   useEffect(() => { if (state.player.score > 0) { const timer = setTimeout(() => setCoachDismissed(true), 6500); return () => clearTimeout(timer); } }, [state.player.score]);
   const room = HOUSE.rooms.find(r => r.id === state.player.roomId)!;
   const remaining = state.targets.length - state.player.score;
-  const ended = state.status !== 'playing';
+  const ended = state.status === 'finished' || state.status === 'expired';
+  bridge.inputEnabled = ready && !ended && !leaving && !help && !mapOpen;
   const coach = state.player.score > 0 ? 'You got him! Keep exploring. Every room has more questionable alibis.' : state.opened.some(id => state.targets.some(t => t.slotId === id)) ? 'There he is! Tap Balaji’s face to catch him and score a point.' : state.player.roomId !== 'hall' ? 'Tap furniture to check it. Look closely for little glimpses of a face.' : 'Tap a doorway to explore. The living room is a good place to start.';
   const navigate = (point: Point) => { bridge.navigate?.(point); setMapOpen(false); };
 

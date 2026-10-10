@@ -8,7 +8,7 @@
     "dev": "npm run dev --workspace @father-hunter/web",
     "build": "npm run typecheck && npm run build --workspace @father-hunter/web",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "node --test packages/game-core/test/*.test.ts",
     "test:browser": "node scripts/browser-check.mjs",
     "preview": "npm run preview --workspace @father-hunter/web"
   },
@@ -18,7 +18,6 @@
     "@vitejs/plugin-react": "6.1.2",
     "playwright": "1.60.0",
     "typescript": "7.0.2",
-    "vite": "8.3.4",
-    "vitest": "5.0.3"
+    "vite": "8.3.4"
   }
 }

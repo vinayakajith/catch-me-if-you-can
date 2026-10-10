@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "types": ["vite/client"]
   },
-  "include": ["apps/web/src", "packages/game-core/src", "packages/game-core/test", "apps/web/vite.config.ts"]
+  "include": ["apps/web/src", "packages/game-core/src", "apps/web/vite.config.ts"]
 }
