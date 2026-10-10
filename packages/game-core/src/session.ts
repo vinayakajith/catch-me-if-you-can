@@ -1,5 +1,5 @@
-import { HOUSE, canReach, isWalkable, roomAt } from './house';
-import type { ActionResult, Activity, HuntSession, HuntSnapshot, Point, Target } from './types';
+import { HOUSE, canReach, isWalkable, roomAt } from './house.ts';
+import type { ActionResult, Activity, HuntSession, HuntSnapshot, Point, Target } from './types.ts';
 
 export const ROUND_MS = 10 * 60 * 1000;
 export const EXPIRY_MS = 60 * 60 * 1000;
@@ -36,7 +36,9 @@ export class LocalHuntSession implements HuntSession {
   private sequence = 1;
   private lastSecond = -1;
   private lastHintAt = -Infinity;
-  constructor(name: string, seed: string, private clock: () => number = Date.now) {
+  private clock: () => number;
+  constructor(name: string, seed: string, clock: () => number = Date.now) {
+    this.clock = clock;
     const now = clock();
     this.state = { id: `solo-${seed}`, seed, status: 'playing', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
       player: { id: 'hunter-1', name: name.trim().slice(0, 24) || 'Detective', position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },

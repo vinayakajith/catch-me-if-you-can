@@ -1,4 +1,4 @@
-import type { CharacterPack, HidingSlot, HouseDefinition, Point, PropKind, Rect, RoomDefinition, RoomId } from './types';
+import type { CharacterPack, HidingSlot, HouseDefinition, Point, PropKind, Rect, RoomDefinition, RoomId } from './types.ts';
 
 const rooms: RoomDefinition[] = [
   { id: 'living', name: 'Living room', subtitle: 'The remote is also missing.', x: 50, y: 80, w: 600, h: 410, color: '#c68c64', floor: '#e7c7a4' },
@@ -31,7 +31,7 @@ const content: Record<Exclude<RoomId, 'hall'>, SlotInput[]> = {
     ['bed', 'bed', 'peek', 130, 108, 164, 122, 'That pillow is wearing glasses.', 'I was resting my eyes!', 'A blanket rolled with suspicious care.'],
     ['wardrobe', 'wardrobe', 'search', 356, 91, 107, 110, 'A shirt is quietly asking for tea.', 'This is my formal hiding place.', 'Wedding clothes from 1998. Still fit, apparently.'],
     ['laundry', 'laundry', 'search', 354, 287, 86, 64, 'Freshly washed. Mildly suspicious.', 'Do not put me on spin cycle.', 'One sock. As tradition demands.'],
-    ['mirror', 'mirror', 'peek', 347, 186, 67, 74, 'A reflection with its own plans.', 'Must be your imagination.', 'Looking very detective today.'],
+    ['mirror', 'mirror', 'peek', 280, 186, 67, 74, 'A reflection with its own plans.', 'Must be your imagination.', 'Looking very detective today.'],
     ['desk', 'desk', 'peek', 117, 294, 125, 65, 'A head behind the unpaid bills.', 'EMI found me first.', 'Receipts. Every receipt. Since 2004.'],
     ['plant', 'plant', 'peek', 235, 294, 52, 65, 'This plant has a receding hairline.', 'Indoor plants need privacy.', 'A fake plant. A real disappointment.'],
   ],
