@@ -54,22 +54,22 @@ async function commode(page, mobile) {
   await page.screenshot({ path: new URL(mobile ? 'mobile-catch.png' : 'desktop-catch.png', artifacts).pathname });
 }
 
-async function finishHunt(page) {
+async function finishHunt(page, mobile = false) {
   const targets = await page.evaluate(() => window.__huntTest.session.getSnapshot().targets.filter(t => !t.claimedBy).map(t => window.__huntTest.slots.find(s => s.id === t.slotId)));
   for (const slot of targets) {
     await page.evaluate(p => window.__huntTest.walk(p), slot.anchor);
     await waitForArrival(page, slot.anchor);
     if (slot.mode === 'search') {
-      await tapWorld(page, { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h / 2 });
+      await tapWorld(page, { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h / 2 }, mobile);
       await page.waitForFunction(id => window.__huntTest.session.getSnapshot().opened.includes(id), slot.id);
       await page.waitForTimeout(450);
     }
-    await tapWorld(page, slot.mode === 'search' ? await page.evaluate(id => window.__huntTest.face(id), slot.id) : { x: slot.hit.x + slot.hit.w / 2, y: slot.hit.y + slot.hit.h / 2 });
+    await tapWorld(page, slot.mode === 'search' ? await page.evaluate(id => window.__huntTest.face(id), slot.id) : { x: slot.hit.x + slot.hit.w / 2, y: slot.hit.y + slot.hit.h / 2 }, mobile);
     await page.waitForFunction(id => window.__huntTest.session.getSnapshot().targets.some(t => t.slotId === id && t.claimedBy), slot.id);
   }
   await page.getByRole('heading', { name: 'Absolutely dad-icated.' }).waitFor();
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score), 12);
-  await page.screenshot({ path: new URL('desktop-results.png', artifacts).pathname });
+  await page.screenshot({ path: new URL(mobile ? 'mobile-results.png' : 'desktop-results.png', artifacts).pathname });
   await page.getByRole('button', { name: /Hide him again/ }).click();
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().player.score === 0 && window.__huntTest.session.getSnapshot().seed !== 'welcome-home');
 }
@@ -93,7 +93,7 @@ try {
   console.log('PASS desktop: start, navigation, commode reveal, all twelve catches, results, and replay');
   await desktop.close();
 
-  const mobile = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'reduce' });
+  const mobile = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'no-preference' });
   const phone = await mobile.newPage();
   await phone.goto(baseURL); await phone.screenshot({ path: new URL('mobile-home.png', artifacts).pathname, fullPage: true });
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Landing fits mobile');
@@ -117,10 +117,19 @@ try {
   await phone.waitForTimeout(350);
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Landscape fits');
   await phone.screenshot({ path: new URL('mobile-landscape.png', artifacts).pathname });
-  console.log('PASS mobile: portrait layout, map navigation, touch reveal/catch, joystick, help, and rotation');
+  await phone.setViewportSize(devices['iPhone 13'].viewport);
+  await phone.waitForTimeout(350);
+  await finishHunt(phone, true);
+  console.log('PASS mobile: portrait layout, map navigation, twelve touch catches, joystick, help, rotation, results, and replay');
   await mobile.close();
   assert.deepEqual(errors, [], 'No unhandled browser errors');
   console.log('Screenshots saved in artifacts/.');
+} catch (error) {
+  if (errors.length) console.error('Browser errors:', errors);
+  for (const [i, page] of (browser?.contexts().flatMap(context => context.pages()) ?? []).entries()) {
+    await page.screenshot({ path: new URL(`failure-${i}.png`, artifacts).pathname }).catch(() => {});
+  }
+  throw error;
 } finally {
   await browser?.close();
   if (server?.pid) { try { process.kill(-server.pid, 'SIGTERM'); } catch { /* Already exited. */ } }

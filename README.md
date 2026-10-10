@@ -8,14 +8,14 @@ Phase 1 is a local solo prototype: one five-room house, twelve seeded targets, t
 
 The bathroom includes the signature reveal: open the commode lid, find Balaji inside the bowl, and tap him to score. Opening a hiding place does not automatically award a point.
 
-Validation status: all fourteen core tests pass. The frontend build and desktop/mobile browser playthrough are still pending because this development session cannot download dependencies. Run the checks below after `npm install` before treating the prototype as playtest-ready.
+Validation status: all fourteen core tests, the production build, and complete desktop/mobile-emulation browser playthroughs pass. Both playthroughs catch all twelve fathers, reach results, and replay. Mobile checks also cover animated reactions, the touch joystick, map, help, and portrait/landscape rotation. Physical-phone and friend playtests are the next gate.
 
 ## Run locally
 
 Use Node.js 24 or newer and npm 11 or newer.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
