@@ -44,7 +44,7 @@ export class LocalHuntSession implements HuntSession {
     this.clock = clock;
     this.hardExpiry = options.expiresAt;
     const now = clock();
-    const playerName = name.trim().slice(0, 24) || 'Detective';
+    const playerName = name.trim().slice(0, 24) || 'Agent';
     const profile = createFatherProfile(father.name, father);
     this.state = { id: options.id ?? `solo-${seed}`, seed, father: profile, case: createTimeMachineCase(profile.name, playerName), status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: options.expiresAt ?? now + EXPIRY_MS, now, lastCatchAt: now,
       player: { id: options.playerId ?? 'hunter-1', name: playerName, position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
@@ -147,7 +147,7 @@ export class LocalHuntSession implements HuntSession {
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
     const target = this.state.targets.find(t => t.id === targetId);
     if (!target) return this.error('Suspicious, but not your father.');
-    if (target.claimedBy) return this.error('Already caught. One dad, one point.');
+    if (target.claimedBy) return this.error(`Already caught. One ${this.state.father.name}, one point.`);
     let location: string, slotId: string | undefined;
     if (target.kind === 'hidden') {
       const slot = HOUSE.slots.find(s => s.id === target.slotId)!;
@@ -174,13 +174,13 @@ export class LocalHuntSession implements HuntSession {
     this.tick();
     const now = this.clock();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
-    if (now - this.state.lastCatchAt < HINT_MS || now - this.lastHintAt < HINT_MS) return this.error('Give your detective instincts a moment.');
+    if (now - this.state.lastCatchAt < HINT_MS || now - this.lastHintAt < HINT_MS) return this.error('Give your agent instincts a moment.');
     const target = this.state.targets.find(t => !t.claimedBy);
-    if (!target) return this.error('All dads accounted for.');
+    if (!target) return this.error(`Every ${this.state.father.name} accounted for.`);
     const roomId = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)!.roomId : roomAt(broomPosition(target, now - this.state.startedAt));
     const room = HOUSE.rooms.find(r => r.id === roomId)!;
     this.lastHintAt = now;
-    const message = `A suspicious dad noise came from the ${room.name.toLowerCase()}.`;
+    const message = `A suspicious ${this.state.father.name} noise came from the ${room.name.toLowerCase()}.`;
     this.addActivity(message, 'hint'); this.emit();
     return { ok: true, message, kind: 'hint' };
   }

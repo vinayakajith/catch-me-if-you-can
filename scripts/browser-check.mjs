@@ -18,7 +18,7 @@ async function available() {
 async function start(page, name, seed = fixtureSeed, options = {}) {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${baseURL}/?test=1&seed=${encodeURIComponent(seed)}`, { waitUntil: 'networkidle' });
-  await page.getByLabel('WHAT SHOULD WE CALL YOU, DETECTIVE?').fill(name);
+  await page.getByLabel('WHAT SHOULD WE CALL YOU, AGENT?').fill(name);
   await page.getByLabel('WHO’S THE WITCH-SCIENTIST?').fill(options.fatherName || 'Balaji');
   await page.getByRole('button', { name: 'Play solo', exact: true }).click();
   await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
@@ -31,13 +31,9 @@ async function start(page, name, seed = fixtureSeed, options = {}) {
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
   assert.ok(await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - Date.now() > 119000), 'Taking the case grants the full two minutes');
   assert.equal(await page.locator('.activity-list').count(), 0, 'No mid-game gossip feed');
-  const transparent = await page.evaluate(async () => {
-    const img = new Image(); img.src = '/assets/detective-poses.png'; await img.decode();
-    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
-    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
-    return ctx.getImageData(0, 0, 1, 1).data[3];
-  });
-  assert.equal(transparent, 0, 'Detective atlas has genuine transparent alpha');
+  const rendering = await page.evaluate(() => { const canvas = document.querySelector('.game-canvas canvas'), box = canvas.getBoundingClientRect(); return { ratio: canvas.width / box.width, expected: Math.min(2, devicePixelRatio), texture: window.__huntTest.scene.hunter.texture.key }; });
+  assert.ok(Math.abs(rendering.ratio - rendering.expected) < .01, 'Canvas renders at the capped device pixel ratio');
+  assert.equal(rendering.texture, 'agent', 'The suited agent rig is used');
   await page.getByRole('button', { name: 'Dismiss guidance' }).click();
 }
 
@@ -206,7 +202,7 @@ async function checkEdges(browser) {
   const context = await browser.newContext({ ...devices['iPhone 13'], viewport: { width: 320, height: 568 }, reducedMotion: 'no-preference' });
   const page = await context.newPage();
   await page.clock.install();
-  await start(page, 'Edge detective', fixtureSeed, { fatherName: 'Suresh' });
+  await start(page, 'Edge agent', fixtureSeed, { fatherName: 'Suresh' });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Small portrait fits');
   const statue = HOUSE.slots.find(s => s.kind === 'statue');
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.roomId), 'hall');
@@ -214,21 +210,21 @@ async function checkEdges(browser) {
   await tapWorld(page, statue.target, true);
   await page.waitForFunction(() => window.__huntTest.presentation().busy, undefined, { timeout: 15000 });
   await page.waitForTimeout(595);
-  await page.screenshot({ path: new URL('small-phone-backside-whack.png', artifacts).pathname });
+  await page.screenshot({ path: new URL('small-phone-head-hammer.png', artifacts).pathname });
   await waitForBag(page, 1);
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.roomId), 'living', 'A tap on the lit statue walks through the doorway');
   assert.equal(await page.locator('.hud-stat').count(), 2, 'Only time and the actual bag count are shown');
   await page.clock.fastForward(120001);
   await page.locator('.result-card').waitFor();
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().finishReason), 'timeout');
-  assert.match(await page.locator('.result-player').innerText(), /caught 1 Suresh in 2 minutes/);
+  assert.match(await page.locator('.result-player').innerText(), /caught 1 Suresh in 2:00/);
   const card = await page.locator('.result-card').boundingBox();
   assert.ok(card.y >= 0 && card.y + card.height <= 568, 'Result card fits a short phone');
   const again = await page.getByRole('button', {name:/Take another case/}).boundingBox();
   assert.ok(again.y >= 0 && again.y + again.height <= 568, 'Replay is immediately reachable');
   await page.screenshot({ path: new URL('small-phone-timeout.png', artifacts).pathname });
   await context.close();
-  console.log('PASS small phone: immediate spotlight catch, automatic approach, backside impact, background deadline');
+  console.log('PASS small phone: immediate spotlight catch, automatic approach, head impact, background deadline');
 
   const faults = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
   const missing = await faults.newPage();

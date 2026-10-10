@@ -10,16 +10,17 @@ export function GameCanvas({ bridge }: { bridge: GameBridge }) {
     Promise.all([import('phaser'), import('./HouseScene')]).then(([{ default: Phaser }, { HouseScene }]) => {
       if (cancelled || !parent.current) return;
       const node = parent.current;
-      game = new Phaser.Game({ type: Phaser.AUTO, parent: node, width: node.clientWidth, height: node.clientHeight,
-        backgroundColor: '#29493d', antialias: true, roundPixels: true,
+      const density = Math.max(1, Math.min(2, window.devicePixelRatio || 1)); bridge.pixelRatio = density;
+      game = new Phaser.Game({ type: Phaser.AUTO, parent: node, width: Math.round(node.clientWidth * density), height: Math.round(node.clientHeight * density),
+        backgroundColor: '#29493d', antialias: true, roundPixels: false,
         scene: new HouseScene(bridge), input: { activePointers: 3, keyboard: true },
-        scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+        scale: { mode: Phaser.Scale.NONE, zoom: 1 / density, autoCenter: Phaser.Scale.CENTER_BOTH },
         audio: { noAudio: true }, banner: false,
       });
-      observer = new ResizeObserver(() => { if (node.clientWidth && node.clientHeight) game?.scale.resize(node.clientWidth, node.clientHeight); });
+      observer = new ResizeObserver(() => { if (node.clientWidth && node.clientHeight) game?.scale.resize(Math.round(node.clientWidth * density), Math.round(node.clientHeight * density)); });
       observer.observe(node);
     }).catch(() => bridge.failed('The game could not start. Please reload and try again.'));
     return () => { cancelled = true; observer?.disconnect(); game?.destroy(true); };
   }, [bridge]);
-  return <div ref={parent} className="game-canvas" role="application" aria-label={`${bridge.session.getSnapshot().father.name}’s house. Tap the floor to walk, tap furniture to search, and tap a visible dad to catch him.`} />;
+  return <div ref={parent} className="game-canvas" role="application" aria-label={`${bridge.session.getSnapshot().father.name}’s house. Tap the floor to walk, tap furniture to search, and tap a visible ${bridge.session.getSnapshot().father.name} to catch him.`} />;
 }

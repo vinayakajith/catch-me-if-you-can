@@ -5,6 +5,8 @@ import type { DadPose } from './art/dad';
 import { FatherArt } from './FatherArt';
 import { playSound, unlockSound } from './sound';
 import './case-intro.css';
+import { agentSvg } from './art/agent';
+import { svgUri } from './game/art';
 
 interface Props {
   story: CaseStory; father: CharacterPack; ready: boolean; error: string; sound: boolean; reducedMotion: boolean;
@@ -40,12 +42,12 @@ function Lab({ father, time, step, fallback }: { father: CharacterPack; time: nu
         entering feet visibly pass behind the machine instead of fading on the floor. */}
     {!fallback && <image href="/assets/time-machine-lab.png" width="1536" height="1024" clipPath="url(#portal-lip)" />}
     {step >= 2 && <g transform={`translate(${1050 + Math.sin(time / 90) * 8} 190)`}><path d="M-72 0L-100 -37M0 -18V-63M68 0L104 -37" stroke="#fff5b3" strokeWidth="13" strokeLinecap="round" /></g>}
-    <rect x="0" y="948" width="1536" height="76" fill="#243d32" opacity=".95" /><text x="40" y="996" fill="#fbefc8" fontFamily="monospace" fontSize="25">{['PROJECT: YESTERDAY', 'DESTINATION: 1998', 'ERROR: DAD OVERFLOW', 'CONTAINMENT: ABSOLUTELY FUCKED'][step]}</text>
+    <rect x="0" y="948" width="1536" height="76" fill="#243d32" opacity=".95" /><text x="40" y="996" fill="#fbefc8" fontFamily="monospace" fontSize="25">{['PROJECT: YESTERDAY', 'DESTINATION: 1998', `ERROR: ${father.name.toUpperCase()} OVERFLOW`, 'CONTAINMENT: ABSOLUTELY FUCKED'][step]}</text>
   </svg>;
 }
 
 function Dispatch() {
-  return <div className="dispatch-tableau" aria-hidden="true"><div className="dispatch-seal"><span>GOVERNMENT OF</span><b>✳</b><span>ABSOLUTE NONSENSE</span></div><div className="dispatch-detective" /><div className="dispatch-equipment"><ShoppingBag /><span>1 STICK. 1 SACK.<br />BACKUP: LOL.</span></div><div className="dispatch-stamp">CONTAIN THIS<br /><strong>SHITSHOW</strong></div><div className="dispatch-deadline">02:00<span>THEN IT’S THE NEXT SHIFT’S PROBLEM.</span></div></div>;
+  return <div className="dispatch-tableau" aria-hidden="true"><div className="dispatch-seal"><span>GOVERNMENT OF</span><b>✳</b><span>ABSOLUTE NONSENSE</span></div><img className="dispatch-agent" src={svgUri(agentSvg())} alt="" /><div className="dispatch-equipment"><ShoppingBag /><span>1 HAMMER. 1 SACK.<br />BACKUP: LOL.</span></div><div className="dispatch-stamp">CONTAIN THIS<br /><strong>SHITSHOW</strong></div><div className="dispatch-deadline">02:00<span>THEN IT’S THE NEXT SHIFT’S PROBLEM.</span></div></div>;
 }
 
 export function CaseIntro({ story, father, ready, error, sound, reducedMotion, toggleSound, toggleMotion, onStart, onLeave }: Props) {
@@ -56,7 +58,7 @@ export function CaseIntro({ story, father, ready, error, sound, reducedMotion, t
   const soundRef = useRef(sound); soundRef.current = sound;
   useEffect(() => {
     let active = true;
-    const images = ['/assets/time-machine-lab.png', father.atlas, '/assets/detective-poses.png'].map(src => new Promise<void>(resolve => {
+    const images = ['/assets/time-machine-lab.png', father.atlas].map(src => new Promise<void>(resolve => {
       const img = new Image(); img.onload = () => resolve(); img.onerror = () => { if (active) setArtFailed(true); resolve(); }; img.src = src;
     }));
     Promise.all(images).then(() => { if (active) setArtReady(true); });
@@ -89,7 +91,7 @@ export function CaseIntro({ story, father, ready, error, sound, reducedMotion, t
       <span className="intro-scene-number">0{step + 1} / 05</span>
     </div>
     <div className="intro-content"><div className="intro-story" aria-live="polite" aria-atomic="true"><span className="eyebrow">{beat.kicker}</span><h2 id="intro-title">{beat.title}</h2><p id="intro-story">{beat.text}</p></div>
-      {final && <div className="intro-mission"><ShoppingBag size={23} /><span><strong>Tap to walk. Check furniture. Tap dads to bag.</strong><small>Five rooms. Two minutes. No dignity.</small></span></div>}
+      {final && <div className="intro-mission"><ShoppingBag size={23} /><span><strong>Tap to walk. Check furniture. Tap {father.name}s to bag.</strong><small>Five rooms. Two minutes. No dignity.</small></span></div>}
       {error && <p className="intro-error" role="alert">{error}</p>}
       <div className="intro-actions">
         {error ? <button className="button primary" onClick={() => location.reload()}>Reload the house</button> : <button data-autofocus className="button primary" disabled={final && !ready} onClick={final ? start : () => setClock(STARTS[step + 1])}>{final ? ready ? 'Grab the sack. Start hunt.' : 'Preparing the house…' : 'Next scene'}<ArrowRight size={18} /></button>}

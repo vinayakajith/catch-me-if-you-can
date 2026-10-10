@@ -73,14 +73,14 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
       <section className="hero">
         <div className="hero-copy">
           <div className="eyebrow"><span className="tiny-star">✳</span> A GOVERNMENT-SIZED SCREW-UP</div>
-          <h1>One dad.<br />All chaos.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
-          <p className="hero-description">Dad put witchcraft in a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the detective sent to clean up the shitshow.</p>
+          <h1><span className="named-headline" style={{ fontSize: father.name.length > 12 ? ".65em" : undefined }}>One {father.name}.</span>All chaos.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
+          <p className="hero-description">{father.name} put witchcraft in a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the agent sent to clean up the shitshow.</p>
           <form className="start-form" onSubmit={submit}>
-            <div className="personal-dad"><button type="button" className="photo-start" onClick={() => setCreating(true)}>{selected ? <Dad character={father} expression={1} /> : <Upload size={22} />}<span><strong>{selected ? 'Your Dad is ready' : resume ? 'Continue making your Dad' : 'Use your dad’s photo'}</strong><small>{selected ? 'Six faces. Extremely questionable intentions.' : resume ? 'His progress is saved. Pick up where you left off.' : 'Turn him into the actual troublemaker.'}</small></span><ArrowRight size={17} /></button>{selected && <button type="button" className="sample-switch" onClick={() => { setSelected(null); setResume(false); rememberCharacterJob(null); setPhotoError(''); }}>Use sample Balaji instead</button>}</div>
+            <div className="personal-dad"><button type="button" className="photo-start" onClick={() => setCreating(true)}>{selected ? <Dad character={father} expression={1} /> : <Upload size={22} />}<span><strong>{selected ? `${father.name} is ready` : resume ? `Continue making ${father.name}` : `Use ${father.name}’s photo`}</strong><small>{selected ? 'Six faces. Extremely questionable intentions.' : resume ? 'His progress is saved. Pick up where you left off.' : 'Turn him into the actual troublemaker.'}</small></span><ArrowRight size={17} /></button>{selected && <button type="button" className="sample-switch" onClick={() => { setSelected(null); setResume(false); rememberCharacterJob(null); setPhotoError(''); }}>Use sample Balaji instead</button>}</div>
             {photoError && <p role="alert" className="photo-warning">{photoError}</p>}
             <label htmlFor="father-name">WHO’S THE WITCH-SCIENTIST?</label>
             <div className="father-field"><span>Dr.</span><input id="father-name" name="fatherName" autoComplete="off" maxLength={32} value={fatherName} onChange={e => setFatherName(e.target.value)} required /></div>
-            <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, DETECTIVE?</label>
+            <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, AGENT?</label>
             <div className="start-fields"><input id="player-name" name="name" autoComplete="given-name" placeholder="Your name" maxLength={24} value={name} onChange={e => setName(e.target.value)} required /><button className="button primary" type="submit" disabled={hosting}>{hosting ? 'Creating…' : 'Create hunt'} <ArrowRight size={20} /></button></div>
             <button type="button" className="text-button solo-link" disabled={hosting || !name.trim() || !fatherName.trim()} onClick={() => onStart(name.trim(), father)}>Play solo <ArrowRight size={14} /></button><div className="start-note"><Check size={14} /> No signup. No gaming skills. Just suspicious instincts.</div>
           </form>
@@ -95,17 +95,17 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
             <div className="portrait-stage"><div className="portrait-grid" /><Dad character={father} /><span className="portrait-bubble">“I see no flaws<br />in my work.”</span></div>
             <div className="poster-name">{father.name}<span>Dr. is a self-awarded title.</span></div>
             <p>Illegal copies. Absolutely no impulse control.<br />May be hiding in your commode.</p>
-            <div className="poster-stamp">TOO MANY DADS · 0 PERMITS</div>
+            <div className="poster-stamp">TOO MANY {father.name.toUpperCase()}S · 0 PERMITS</div>
           </article>
           <div className="little-label"><span>✳</span><div>GOVERNMENT EQUIPMENT<strong>One sack. Budget cuts.</strong></div></div>
           <span className="art-star star-one">✳</span><span className="art-star star-two">✧</span>
         </div>
       </section>
-      <section className="how-section" id="how-to-play"><div className="how-heading"><span className="eyebrow">YOUR EXTREMELY BRIEF TRAINING</span><h2>Anyone can hunt a dad.</h2><p>Yes, even that friend who never plays games.</p></div>
+      <section className="how-section" id="how-to-play"><div className="how-heading"><span className="eyebrow">YOUR EXTREMELY BRIEF TRAINING</span><h2>Anyone can hunt {father.name}.</h2><p>Yes, even that friend who never plays games.</p></div>
         <div className="how-grid">
           <article><div className="how-icon"><Footprints size={27} /><span>01</span></div><h3>Tap. Take a little walk.</h3><p>Tap the floor to wander through the house. Every doorway is a new bad alibi.</p></article>
-          <article><div className="how-icon green"><DoorOpen size={27} /><span>02</span></div><h3>Be a little suspicious.</h3><p>Check the furniture. Open the lids. That pickle jar might contain an upside-down dad.</p></article>
-          <article><div className="how-icon yellow"><MousePointer2 size={27} /><span>03</span></div><h3>See dad? Tap dad.</h3><p>One comic whack. Into the sack. Catch as many as you can before your two minutes run out.</p></article>
+          <article><div className="how-icon green"><DoorOpen size={27} /><span>02</span></div><h3>Be a little suspicious.</h3><p>Check the furniture. Open the lids. That pickle jar might contain an upside-down {father.name}.</p></article>
+          <article><div className="how-icon yellow"><MousePointer2 size={27} /><span>03</span></div><h3>See {father.name}? Tap {father.name}.</h3><p>One giant hammer. Into the sack. Catch as many as you can before your two minutes run out.</p></article>
         </div>
       </section>
     </main>
