@@ -2,12 +2,12 @@ let context: AudioContext | undefined;
 export function unlockSound() {
   try { context ??= new AudioContext(); void context.resume(); } catch { /* Sound is optional. */ }
 }
-export function playSound(kind: 'catch' | 'open', enabled: boolean) {
+export function playSound(kind: 'catch' | 'open' | 'chaos', enabled: boolean) {
   if (!enabled) return;
   unlockSound();
   if (!context) return;
   const ctx = context;
-  const notes = kind === 'catch' ? [392, 523, 659, 784] : [180, 240];
+  const notes = kind === 'catch' ? [392, 523, 659, 784] : kind === 'chaos' ? [110, 440, 165, 660, 220, 880] : [180, 240];
   notes.forEach((frequency, index) => {
     const oscillator = ctx.createOscillator(), gain = ctx.createGain();
     const start = ctx.currentTime + index * .075;

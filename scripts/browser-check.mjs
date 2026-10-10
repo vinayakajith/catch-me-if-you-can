@@ -14,17 +14,19 @@ async function available() {
   try { return (await fetch(baseURL, { signal: AbortSignal.timeout(1000) })).ok; } catch { return false; }
 }
 
-async function start(page, name, seed = 'browser-56') {
+async function start(page, name, seed = 'browser-56', options = {}) {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${baseURL}/?test=1&seed=${encodeURIComponent(seed)}`, { waitUntil: 'networkidle' });
   await page.getByLabel('WHAT SHOULD WE CALL YOU, DETECTIVE?').fill(name);
+  await page.getByLabel('WHO’S THE MAD SCIENTIST?').fill(options.fatherName || 'Balaji');
   await page.getByRole('button', { name: /Let’s find dad/ }).click();
-  await page.getByRole('button', { name: 'Take the case', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
   await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready', undefined, { timeout: 20000 });
   await page.waitForTimeout(1100);
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().status), 'ready', 'Case story does not start the timer');
   await page.screenshot({ path: new URL(`${name}-case.png`, artifacts).pathname });
-  await page.getByRole('button', { name: 'Take the case', exact: true }).click();
+  if (options.reviewIntro) await reviewIntro(page, options.fatherName, options.mobile);
+  else await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).click();
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
   assert.ok(await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - Date.now() > 599000), 'Taking the case grants the full ten minutes');
   assert.equal(await page.locator('.activity-list').count(), 0, 'No mid-game gossip feed');
@@ -36,6 +38,51 @@ async function start(page, name, seed = 'browser-56') {
   });
   assert.equal(transparent, 0, 'Detective atlas has genuine transparent alpha');
   await page.getByRole('button', { name: 'Dismiss guidance' }).click();
+}
+
+async function reviewIntro(page, fatherName, mobile) {
+  const scene = id => page.locator(`.intro-stage[data-scene="${id}"]`);
+  assert.equal(await page.locator('#intro-title').innerText(), `Dr. ${fatherName}. Unsupervised.`);
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.name), fatherName);
+  await scene('experiment').waitFor();
+  await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-experiment.png`, artifacts).pathname });
+  if (mobile) {
+    // Motion mode plays through the actual scene timing. Pausing must stop both
+    // animation and automatic scene changes, including during phone rotation.
+    await scene('chaos').waitFor({ timeout: 9000 });
+    await page.getByRole('button', { name: 'Pause intro', exact: true }).tap();
+    await page.waitForTimeout(7200);
+    await scene('chaos').waitFor();
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Intro fits landscape');
+    const primary = await page.getByRole('button', { name: 'Next scene', exact: true }).boundingBox();
+    assert.ok(primary && primary.y + primary.height <= 390, 'Landscape intro action remains visible');
+    await page.screenshot({ path: new URL('mobile-intro-landscape.png', artifacts).pathname });
+    await page.setViewportSize(devices['iPhone 13'].viewport);
+  } else {
+    await page.waitForTimeout(6200);
+    await scene('experiment').waitFor(); // Reduced motion does not auto-advance text.
+    await page.getByRole('button', { name: 'Next scene', exact: true }).click();
+  }
+  assert.equal(await page.locator('.clone-path').count(), 6, 'Exactly six escaped clones');
+  await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-chaos.png`, artifacts).pathname });
+  if (mobile) {
+    await page.getByRole('button', { name: 'Play intro', exact: true }).tap();
+    await scene('dispatch').waitFor({ timeout: 9000 });
+  } else {
+    assert.equal(await page.locator('.clone-flyer').evaluate(el => getComputedStyle(el).animationName), 'none');
+    await page.getByRole('button', { name: 'Next scene', exact: true }).click();
+  }
+  assert.ok((await page.locator('#intro-story').innerText()).includes(fatherName));
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().status), 'ready', 'Watching the full intro never consumes hunt time');
+  await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-dispatch.png`, artifacts).pathname });
+  await page.getByRole('button', { name: 'Watch again', exact: true }).click();
+  await scene('experiment').waitFor();
+  await page.getByRole('button', { name: 'Next scene', exact: true }).click();
+  await page.getByRole('button', { name: 'Next scene', exact: true }).click();
+  await page.getByRole('button', { name: 'Grab the sack. Start hunt.', exact: true }).click();
+  console.log(`PASS ${mobile ? 'mobile' : 'desktop'} intro: personalized story, six clones, ${mobile ? 'auto-advance, pause, rotation' : 'manual reduced motion'}, replay, and timer protection`);
 }
 
 async function tapWorld(page, point, mobile = false) {
@@ -104,13 +151,14 @@ async function finishHunt(page, mobile = false) {
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score), 6);
   await page.screenshot({ path: new URL(mobile ? 'mobile-results.png' : 'desktop-results.png', artifacts).pathname });
   await page.getByRole('button', { name: /Take another case/ }).click();
-  await page.getByRole('button', { name: 'Take the case', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
+  await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready');
   const after = await page.evaluate(() => window.__huntTest.session.getSnapshot());
   assert.equal(after.status, 'ready'); assert.equal(after.player.score, 0);
   assert.deepEqual(after.opened, []); assert.deepEqual(after.spotted, []);
   assert.notEqual(after.seed, before.seed); assert.equal(after.case.id, before.case.id); assert.deepEqual(after.father, before.father);
   assert.notDeepEqual(after.targets.map(t => t.slotId).sort(), before.targets.map(t => t.slotId).sort());
-  await page.getByRole('button', { name: 'Take the case', exact: true }).click();
+  await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).click();
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
   assert.equal(await page.evaluate(() => window.__huntTest.presentation().bagged), 0);
 }
@@ -162,7 +210,7 @@ try {
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const page = await desktop.newPage();
   await page.goto(baseURL); await page.screenshot({ path: new URL('desktop-home.png', artifacts).pathname, fullPage: true });
-  await start(page, 'Alan');
+  await start(page, 'Alan', 'browser-56', { reviewIntro: true, fatherName: 'Suresh' });
   await page.screenshot({ path: new URL('desktop-house.png', artifacts).pathname });
   await commode(page, false);
   await finishHunt(page);
@@ -173,7 +221,7 @@ try {
   const phone = await mobile.newPage();
   await phone.goto(baseURL); await phone.screenshot({ path: new URL('mobile-home.png', artifacts).pathname, fullPage: true });
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Landing fits mobile');
-  await start(phone, 'Vinayak');
+  await start(phone, 'Vinayak', 'browser-56', { reviewIntro: true, fatherName: 'Chandrashekhar Subramanian', mobile: true });
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Hunt fits mobile');
   await commode(phone, true);
   const joy = await phone.locator('.joystick').boundingBox();

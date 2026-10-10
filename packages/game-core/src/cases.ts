@@ -14,7 +14,7 @@ export function createTimeMachineCase(father: string, detective: string): CaseSt
     beats: [
       { id: 'experiment', kicker: '02:13 AM · ABSOLUTELY NO SUPERVISION', title: `Dr. ${father}. Unsupervised.`, text: 'He built a time machine to win an argument from 1998. Then the idiot climbed in.' },
       { id: 'chaos', kicker: 'THE EXPERIMENT WAS TECHNICALLY A SUCCESS', title: 'One dad in. Six lunatics out.', text: 'One stole a pitchfork. Two are chasing each other. Nobody knows why they’re laughing. All six have escaped into the house.' },
-      { id: 'dispatch', kicker: 'GOVERNMENT BUREAU OF TEMPORAL NONSENSE', title: `Detective ${detective}, you’re up.`, text: `Six copies of ${father}. One government-issued sack. Put all six in the bloody bag before they discover the neighbours.` },
+      { id: 'dispatch', kicker: 'GOVERNMENT BUREAU OF TEMPORAL NONSENSE', title: `Detective ${detective}, you’re up.`, text: `Six copies of ${father} are loose. The government sent you with one sack. Put all six in the bloody bag.` },
     ],
   };
 }

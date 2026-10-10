@@ -20,26 +20,8 @@
 .hunt-shell{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);overscroll-behavior:none}
 @media(max-width:760px){.start-fields input{font-size:16px}.settings .icon-button{width:44px;height:44px}.map-toggle{width:44px}.motion-button{display:none}}
 
-/* Case cards are the only story interruption; the hunt itself stays quiet. */
-.case-backdrop{background:#20392fd9;z-index:120;padding:20px;align-items:safe center}
-.case-brief{position:relative;width:100%;max-width:515px;max-height:calc(100dvh - 40px);overflow-y:auto;background:#f8f0d9;border:1px solid #b7ad8f;border-radius:8px;box-shadow:8px 8px 0 #172d2466;padding:24px 32px 13px}
-.brief-top{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #c8c4a6;padding-bottom:13px}
-.brief-top .eyebrow{font-size:8px;letter-spacing:1.2px;color:#6a7661}.brief-number{font:10px monospace;white-space:nowrap;color:#9e674b}
-.brief-art{height:146px;position:relative;margin:8px 0 12px;background:radial-gradient(ellipse at center,#dbe0bd 0 43%,transparent 44%);overflow:hidden}
-.detective-portrait{background-image:url('/assets/detective-poses.png');background-size:300% 200%;background-position:0 0;background-repeat:no-repeat;width:155px;height:155px;position:absolute;left:calc(50% - 79px);bottom:-5px}
-.brief-art .dad-portrait{position:absolute;width:67px;top:28px;left:calc(50% - 137px);transform:rotate(180deg)}
-.brief-art .dad-portrait:nth-of-type(3){left:auto;right:calc(50% - 134px);top:45px;transform:rotate(16deg)}
-.brief-stamp{position:absolute;bottom:5px;right:6px;color:#b2694e;border:2px solid #b2694e;border-radius:3px;font:700 9px monospace;letter-spacing:1px;transform:rotate(-7deg);padding:7px;background:#f8f0d9e8}
-.brief-assignment{font-size:8px;line-height:1.6;color:#8d9275;letter-spacing:1.1px;overflow-wrap:anywhere}
-.case-brief h2{font:500 36px/1.06 Georgia,serif;letter-spacing:-1px;margin:10px 0 14px}
-.case-brief>p#brief-story{font:15px/1.65 Georgia,serif;color:#61674f}
-.brief-mission{display:flex;align-items:center;gap:12px;border-top:1px dashed #c7c6a8;border-bottom:1px dashed #c7c6a8;margin:21px 0;padding:15px 0;color:#5d7058}
-.brief-mission svg{flex-shrink:0}.brief-mission strong{display:block;font-size:12px}.brief-mission small{display:block;font-size:10px;line-height:1.6;margin-top:5px;color:#868a70}
-.case-brief>.button{width:100%}.case-brief>.button:disabled{background:#b6ab88;box-shadow:none}.case-brief>.text-button{margin:0 auto;color:#8d927b;font-size:11px;min-height:44px}
-.brief-timer{font-size:10px;line-height:1.6;text-align:center;color:#919177;margin-top:13px}.brief-error{font-size:12px;color:#a94e35;margin-bottom:12px}
 .bag-summary{border-top:1px solid #e0e2d3;padding:18px 0;display:flex;align-items:center;gap:13px;color:#9a815c}.bag-summary strong{display:block;font-size:12px;color:#667957}.bag-summary span{display:block;font-size:9px;line-height:1.5;color:#92977c;margin-top:5px}
 .dad-tally{grid-template-columns:repeat(6,1fr)}
-@media(max-width:760px){.case-backdrop{padding:14px}.case-brief{max-height:calc(100dvh - 28px);padding:18px 22px 8px}.brief-top .eyebrow{font-size:7px;letter-spacing:.9px}.brief-number{font-size:9px}.brief-art{height:124px;margin:4px 0 12px}.detective-portrait{width:137px;height:137px;left:calc(50% - 68px)}.brief-art .dad-portrait{width:57px;left:calc(50% - 117px)}.brief-art .dad-portrait:nth-of-type(3){right:calc(50% - 116px)}.brief-stamp{font-size:8px;padding:5px;right:0}.case-brief h2{font-size:30px}.case-brief>p#brief-story{font-size:14px;line-height:1.6}.brief-mission{margin:17px 0;padding:13px 0}.brief-mission small{font-size:10px}.bag-summary{padding:14px 0}.dad-tally>span{height:31px}}
-@media(max-height:650px){.brief-art{height:82px;margin:2px 0 6px}.detective-portrait{width:96px;height:96px;left:calc(50% - 48px)}.brief-art .dad-portrait{width:46px;top:11px;left:calc(50% - 91px)}.brief-art .dad-portrait:nth-of-type(3){right:calc(50% - 89px);top:18px}.case-brief h2{font-size:27px;margin:6px 0 10px}.brief-mission{margin:12px 0;padding:10px 0}.brief-timer{margin-top:9px}}
+@media(max-width:760px){.bag-summary{padding:14px 0}.dad-tally>span{height:31px}}
 
 .father-field{display:flex;align-items:center;gap:9px;border:1px solid #d5d7c7;border-radius:8px;padding:0 14px;background:#fffdf6;max-width:380px;margin-bottom:22px}.father-field span{font:italic 18px Georgia;color:#7b846d}.father-field input{border:0;min-width:0;width:100%;padding:13px 0;background:transparent;color:var(--ink);font-size:16px}.poster-name{text-transform:uppercase;overflow-wrap:anywhere;font-size:clamp(20px,2.4vw,31px);letter-spacing:2px}.poster-name span{text-transform:none}.suspect>div:last-child{min-width:0}.suspect h2{overflow-wrap:anywhere}.hunt-title{overflow-wrap:anywhere;min-width:0}.hunt-title span{flex-shrink:0}

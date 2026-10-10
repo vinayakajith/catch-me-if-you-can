@@ -9,7 +9,7 @@ Human acceptance:
 - A player with no gaming background can start, move, investigate, and catch without coaching.
 - A first-time player finds at least one father in the first minute and understands why harder clues were discoverable.
 - The commode lid, upside-down jar, giant vase, and scoop into the sack are readable and funny at phone size.
-- A quick case brief makes the six copies feel like one ridiculous investigation. Replays change the story and occupied hideouts.
+- The short time-machine intro makes six hyperactive copies feel like one ridiculous government investigation. Skip and reduced motion remain usable; replays change occupied hideouts.
 - Portrait touch controls, text, and targets are usable on an actual phone. No forced rotation.
 - At least a few friends want to try another hunt. Revise hiding difficulty or reactions based on what they actually do.
 
@@ -25,7 +25,7 @@ Gate: five real browser clients compete correctly, including races for the same 
 
 ## Phase 3 — Personal fathers and revenge
 
-Add photo upload, father name, asynchronous image-generation jobs, progress, retryable failures, and creator preview. Generate a recognizable consistent CharacterPack with all six expressions; animate expression assets in the game engine. Uploads and generated assets sit behind a storage interface backed by local files during development.
+Build on the editable father name and shared intro/game CharacterPack. Add photo upload, asynchronous image-generation jobs, progress, retryable failures, and creator preview. Generate a recognizable consistent CharacterPack with all six expressions; animate expression assets in the game engine. The intro reuses the generated face on animated scientist, runner, and flying-pitchfork bodies; its laboratory background stays separate. See [the personalization contract](INTRO-ART.md). Uploads and generated assets sit behind a storage interface backed by local files during development.
 
 Revenge creates a new independent hunt through the same creation flow. It never overwrites the completed room.
 

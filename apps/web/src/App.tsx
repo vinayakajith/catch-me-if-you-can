@@ -3,6 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, Check, Clock3, DoorOpen, Footprints, 
 import { HINT_MS, HOUSE, LocalHuntSession, createFatherProfile, freshHuntSeed, type CharacterPack, type ActionResult, type Point } from '@father-hunter/game-core';
 import { Brand, Dad, HouseMap, Joystick, formatTime } from './components';
 import { GameCanvas } from './game/GameCanvas';
+import { CaseIntro } from './CaseIntro';
 import type { GameBridge } from './game/HouseScene';
 import { playSound, unlockSound } from './sound';
 
@@ -114,13 +115,14 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
     if (accepted && !resultsVisible && !leaving && !help && !mapOpen) return;
     const previous = document.activeElement as HTMLElement | null;
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-    dialog?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    (dialog?.querySelector<HTMLButtonElement>('[data-autofocus]:not(:disabled)') ?? dialog?.querySelector<HTMLButtonElement>('button:not(:disabled)'))?.focus();
     const trap = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !ended) { setHelp(false); setLeaving(false); setMapOpen(false); }
       if (event.key !== 'Tab' || !dialog) return;
       const buttons = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')];
       const first = buttons[0], last = buttons.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!dialog.contains(document.activeElement)) { event.preventDefault(); first?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     };
     document.addEventListener('keydown', trap);
@@ -130,13 +132,13 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
   const navigate = (point: Point) => { bridge.navigate?.(point); setMapOpen(false); };
 
   return <div className={`hunt-shell ${preferences.reducedMotion ? 'reduced-motion' : ''}`}>
-    <header className="hunt-header"><Brand onClick={() => setLeaving(true)} /><div className="hunt-title">{story.title} <span>SOLO HUNT</span></div><div className="settings">
+    <header className="hunt-header" inert={!accepted}><Brand onClick={() => setLeaving(true)} /><div className="hunt-title">{story.title} <span>SOLO HUNT</span></div><div className="settings">
       <button className="icon-button" aria-label={preferences.sound ? 'Mute sound' : 'Enable sound'} aria-pressed={preferences.sound} onClick={() => { unlockSound(); togglePreference('sound'); }}>{preferences.sound ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
       <button className="icon-button motion-button" aria-label="Reduce animation" aria-pressed={preferences.reducedMotion} onClick={() => togglePreference('reducedMotion')}><Waves size={19} /></button>
       <button className="icon-button" aria-label="How to play" onClick={() => setHelp(true)}><HelpCircle size={19} /></button>
       <button className="icon-button leave-button" aria-label="Leave hunt" onClick={() => setLeaving(true)}><X size={19} /></button>
     </div></header>
-    <main className="hunt-main">
+    <main className="hunt-main" inert={!accepted}>
       <div className="hunt-topline"><div><span className="eyebrow">OPERATION: FIND YOUR FATHER</span><h1>He’s in here. <em>Somewhere.</em></h1></div><p>Check the obvious. Then check the embarrassing.</p></div>
       <div className="hunt-layout">
         <section className="play-area" aria-label="Hunt">
@@ -162,15 +164,7 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
         </aside>
       </div>
     </main>
-    {!accepted && <div className="modal-backdrop case-backdrop"><section className="case-brief" role="dialog" aria-modal="true" aria-labelledby="brief-title" aria-describedby="brief-story">
-      <div className="brief-top"><span className="eyebrow">DEPARTMENT OF DAD RETRIEVAL</span><span className="brief-number">06 MISSING</span></div>
-      <div className="brief-art" aria-hidden="true"><div className="detective-portrait" /><Dad character={father} expression={2} /><Dad character={father} expression={1} /><span className="brief-stamp">{story.stamp}</span></div>
-      <span className="eyebrow brief-assignment">YOUR NEXT CASE, DETECTIVE {name.toUpperCase()}</span>
-      <h2 id="brief-title">{story.title}</h2><p id="brief-story">{story.story}</p>
-      <div className="brief-mission"><ShoppingBag size={22} /><span><strong>Find all 6. Put them in the sack.</strong><small>Tap to walk. Tap things to check. Tap a dad to bag him.</small></span></div>
-      {error ? <><p className="brief-error" role="alert">{error}</p><button className="button primary" onClick={() => location.reload()}>Reload the house</button></> : <button className="button primary" disabled={!ready} onClick={() => { unlockSound(); setAccepted(true); }}>{ready ? 'Take the case' : 'Preparing the house…'} <ArrowRight size={19} /></button>}
-      <p className="brief-timer">Your 10 minutes start when you take the case.</p><button className="text-button" onClick={onLeave}>Back to the notice board</button>
-    </section></div>}
+    {!accepted && <CaseIntro story={story} father={father} ready={ready} error={error} sound={preferences.sound} reducedMotion={preferences.reducedMotion} toggleSound={() => { unlockSound(); togglePreference('sound'); }} toggleMotion={() => togglePreference('reducedMotion')} onStart={() => setAccepted(true)} onLeave={onLeave} />}
     {resultsVisible && <div className="modal-backdrop"><section className="result-card" role="dialog" aria-modal="true" aria-labelledby="result-title"><span className="eyebrow">{state.finishReason === 'complete' ? 'CASE CLOSED. SACK FULL.' : 'CONTAINMENT WINDOW CLOSED.'}</span><Dad character={father} expression={state.finishReason === 'complete' ? 4 : 5} /><h2 id="result-title">{state.finishReason === 'complete' ? 'Six dads. One sack.' : state.player.score >= 6 ? 'Dad’s worst nightmare.' : 'A suspicious beginning.'}</h2><p>{state.finishReason === 'complete' ? 'Six unstable idiots. One very unhappy sack. The government calls that a promotion.' : `${remaining} copies of ${father.name} remain at large. The government would like its sack back.`}</p><div className="result-stats"><div><strong>{state.player.score}<small>/ 6</small></strong><span>COPIES BAGGED</span></div><div><strong>{formatTime(Math.min(state.now, state.endsAt) - state.startedAt)}</strong><span>TIME SPENT SNOOPING</span></div></div><div className="result-player"><Trophy size={19} /><strong>{state.player.name}</strong><span>{state.player.score} points</span></div><button className="button primary" onClick={onReplay}>Take another case <ArrowRight size={19} /></button><button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> Back to the notice board</button></section></div>}
     {leaving && !ended && <div className="modal-backdrop"><section className="small-modal" role="dialog" aria-modal="true" aria-labelledby="leave-title"><h2 id="leave-title">Let dad get away?</h2><p>This hunt will end. You can always start another investigation.</p><button className="button primary" onClick={() => setLeaving(false)}>Keep looking</button><button className="text-button" onClick={onLeave}>Leave this hunt</button></section></div>}
     {help && !ended && <div className="modal-backdrop"><section className="small-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title"><button className="icon-button modal-close" aria-label="Close help" onClick={() => setHelp(false)}><X /></button><span className="eyebrow">DETECTIVE TRAINING, AGAIN</span><h2 id="help-title">Just tap. Be curious.</h2><p><Footprints /> Tap the floor or a room on the map to walk there.</p><p><DoorOpen /> Tap furniture to check it. Open lids. Investigate weird corners.</p><p><MousePointer2 /> See a face? Tap it. Your detective walks over and bags him, even if he ducks away.</p><div className="help-note">The timer keeps ticking while you investigate. Keyboard arrows, WASD, and the joystick work too.</div><button className="button primary" onClick={() => setHelp(false)}>Got it. Where’s dad? <ArrowRight size={18} /></button></section></div>}
