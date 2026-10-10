@@ -8,7 +8,7 @@ Phase 1 is a local solo prototype: a five-room house, twenty hiding places, 12�
 
 The spotlighted Liberty pose is a guaranteed easy catch. He is deadly serious, holding a flashlight and notebook in his lungi. A wall portrait is serious too. Other hiding dads laugh: tumbling in a washer, spinning in a microwave, cramped in a wardrobe, upside-down in a pickle jar, inside the commode, and elsewhere. Under the bed, only his lungi hem and legs show. Opening a container reveals its occupant without awarding a point.
 
-Verification includes deterministic rules, physical routes to every hideout, browser input and rendered captures. Actual-phone and friend playtests remain the next gate; automated checks do not establish whether the game is funny.
+Validation: 18 core tests, the production build, complete desktop/mobile browser hunts, and the twenty-hideout visual sweep pass. Extra checks cover a 320 × 568 phone, immediate spotlight discovery, background timeout, slow/missing art and keyboard focus. Actual-phone and friend playtests remain the next gate; automated checks do not establish whether the game is funny.
 
 ## Run locally
 
@@ -46,7 +46,7 @@ npm run test:browser
 
 Core tests use Node's built-in test runner and need no downloaded dependencies. They check all twenty interaction anchors and every pair of routes between them, 500 randomized placements, personalized story/catch names and character metadata, peek timing, remembered sightings, search/reveal/catch ordering, duplicate scoring, the exact three-minute boundary, collision-safe broom routes with 6–10 second rests, locking a moving rider, hints, and a complete hunt.
 
-The browser check starts a development server if necessary, exercises desktop and mobile interactions, and saves screenshots to ignored `artifacts/`. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an existing Chromium installation. Set `FATHER_HUNTER_URL` to test an already-running development server. For an additional art and interaction sweep, run `FATHER_HUNTER_CATALOGUE=1 npm run test:browser`: it finds deterministic seeds covering all twenty hideouts, walks to each one, inspects it, saves its rendered pose, and taps it into the sack.
+The browser check starts a development server if necessary, exercises desktop and mobile interactions, and saves screenshots to ignored `artifacts/`. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an existing Chromium installation. Set `FATHER_HUNTER_URL` to test an already-running development server. Run `FATHER_HUNTER_EDGES=1 npm run test:browser` for short-phone, spotlight approach, timeout, loading and recovery checks. For an additional art and interaction sweep, run `FATHER_HUNTER_CATALOGUE=1 npm run test:browser`: it finds deterministic seeds covering all twenty hideouts, walks to each one, inspects it, saves its rendered pose, and taps it into the sack.
 
 `npm run build` typechecks the application and builds the static frontend into `apps/web/dist`. `npm run preview` serves that build locally.
 

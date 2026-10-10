@@ -34,9 +34,9 @@ function Lab({ father, time, step, fallback }: { father: CharacterPack; time: nu
     {step < 2 && <Figure father={father} x={scientistX} y={scientistY + (entering > 0 && entering < .98 ? walk * 3 : 0)} scale={mix(1.55, .94, entering)} pose="scientist" mood="grin" opacity={1 - clamp((entering - .85) / .15)} />}
     {step === 0 && <g transform="translate(495 316) rotate(-6)"><path d="M0 0H390V91H150L125 116 115 91H0Z" fill="#fff0c4" stroke="#624931" strokeWidth="4" /><text x="195" y="39" textAnchor="middle" fontSize="27" fontWeight="bold" fill="#523e2b">WITCHCRAFT + SCIENCE</text><text x="195" y="72" textAnchor="middle" fontSize="24" fill="#523e2b">What could go wrong?</text></g>}
     {step >= 2 && Array.from({ length: 8 }, (_, i) => {
-      const birth = 7040 + i * 380, t = clamp((time - birth) / 4200), flying = i === 0;
+      const flying = i === 0, birth = flying ? 11000 : 7040 + (i - 1) * 380, t = clamp((time - birth) / 4200);
       const x = mix(1040, [-240, 80, 1470, 520, -200, 1580, 250, 1360][i], t);
-      const y = mix(340, flying ? -170 : 740 + i % 3 * 70, t) - (flying ? Math.sin(t * Math.PI) * 230 : Math.abs(Math.sin(time / 100 + i)) * 16);
+      const y = mix(340, flying ? 45 : 740 + i % 3 * 70, t) - (flying ? Math.sin(t * Math.PI) * 100 : Math.abs(Math.sin(time / 100 + i)) * 16);
       return time >= birth && <Figure key={i} father={father} x={x} y={y} scale={mix(.8, flying ? 1.6 : 1.8, t)} pose={flying ? 'broom' : i === 4 ? 'cramped' : 'run'} mood={i % 2 ? 'laugh' : 'giggle'} angle={flying ? -16 : i === 4 ? t * 360 : Math.sin(time / 100 + i) * 6} />;
     })}
     {/* The doorway lip is painted over the actors from the same background, so

@@ -40,7 +40,7 @@ function Landing({ onStart }: { onStart: (name: string, fatherName: string) => v
       <section className="hero">
         <div className="hero-copy">
           <div className="eyebrow"><span className="tiny-star">✳</span> A GOVERNMENT-SIZED SCREW-UP</div>
-          <h1>One dad.<br />Too many copies.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
+          <h1>One dad.<br />All chaos.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
           <p className="hero-description">Dad put witchcraft in a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the detective sent to clean up the shitshow.</p>
           <form className="start-form" onSubmit={submit}>
             <label htmlFor="father-name">WHO’S THE WITCH-SCIENTIST?</label>
@@ -127,7 +127,7 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
     document.addEventListener('keydown', trap);
     return () => { document.removeEventListener('keydown', trap); previous?.focus(); };
   }, [accepted, ready, resultsVisible, leaving, help, mapOpen]);
-  const coach = state.player.score > 0 ? 'In the bag. Keep checking the other rooms.' : state.opened.some(id => state.targets.some(t => t.kind === 'hidden' && t.slotId === id)) ? 'Tap the face. Your detective will walk over and bag him.' : state.player.roomId !== 'hall' ? 'Tap furniture to check inside. If a face peeks out, tap it.' : 'Tap a doorway, or choose a room on the map. Your detective walks there.';
+  const coach = state.player.score > 0 ? 'In the bag. Keep checking the other rooms.' : state.opened.some(id => state.targets.some(t => t.kind === 'hidden' && t.slotId === id)) ? 'Tap the face. Your detective will walk over and bag him.' : state.player.roomId !== 'hall' ? 'Tap furniture to check inside. If a face peeks out, tap it.' : 'That statue under the spotlight looks suspicious. Tap him; your detective walks over.';
   const navigate = (point: Point) => { bridge.navigate?.(point); setMapOpen(false); };
 
   return <div className={`hunt-shell ${preferences.reducedMotion ? 'reduced-motion' : ''}`}>
@@ -146,7 +146,7 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
             <GameCanvas bridge={bridge} />
             <div className="room-chip"><Home size={15} /><span>{room.name}</span></div>
             {!ready && <div className="game-loading"><Dad character={father} expression={1} /><h2>{error ? 'A little technical hiccup.' : 'Checking under the furniture…'}</h2><p>{error || `${father.name} is finding some deeply questionable hiding spots.`}</p>{error && <button className="button primary" onClick={() => location.reload()}>Try again</button>}</div>}
-            {ready && accepted && !coachDismissed && !ended && <div className="coach"><Sparkles size={17} /><p>{coach}</p><button className="icon-button" aria-label="Dismiss guidance" onClick={() => setCoachDismissed(true)}><X size={15} /></button></div>}
+            {ready && accepted && !coachDismissed && !ended && <div className={`coach ${state.player.roomId === 'hall' && state.player.score === 0 ? 'opening-coach' : ''}`}><Sparkles size={17} /><p>{coach}</p><button className="icon-button" aria-label="Dismiss guidance" onClick={() => setCoachDismissed(true)}><X size={15} /></button></div>}
             {toast && !ended && <div className="toast" role="status">{toast}</div>}
             {ready && accepted && !ended && <><Joystick onMove={point => { bridge.movement = point; }} /><button className="inspect-button" aria-label="Check nearby furniture" onClick={() => bridge.inspect?.()}><Search size={22} /><span>CHECK</span></button></>}
           </div>

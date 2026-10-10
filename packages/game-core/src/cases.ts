@@ -10,10 +10,10 @@ export function createTimeMachineCase(father: string, detective: string): CaseSt
     id: 'time-machine', title: `The ${father} Incident`, stamp: 'TEMPORAL SHITSHOW',
     story: `Dr. ${father}, desi witch-scientist, put a broom engine in a time machine. Now laughing copies of him are loose. The government sent Detective ${detective} with a stick, a sack and three minutes.`,
     beats: [
-      { id: 'experiment', kicker: '02:13 AM · PEER REVIEW: HIS OWN WHATSAPP GROUP', title: `Dr. ${father}. Witch-scientist.`, text: 'A pressure cooker. A broom engine. A time machine. He’s going back to 1998 to prove his wife wrong.' },
+      { id: 'experiment', kicker: '02:13 AM · PEER REVIEW: HIS OWN WHATSAPP GROUP', title: `Dr. ${father}. Witch-scientist.`, text: 'Pressure cooker + broom engine = time machine. Destination: 1998. Mission: prove his wife wrong.' },
       { id: 'entrance', kicker: 'SAFETY OFFICER: ALSO HIM', title: '“I know what I’m doing.”', text: 'Lungi secured. Common sense missing. He presses “yesterday” and walks straight in.' },
-      { id: 'chaos', kicker: 'THE MACHINE HAS SELECTED: MORE DAD', title: 'Oh, for fuck’s sake.', text: 'The machine can’t send him back. So it keeps sending him out. Every copy has his face and absolutely none of his shame.' },
-      { id: 'escape', kicker: 'CONTAINMENT STATUS: LAUGHING AT YOU', title: 'The house is now his problem.', text: 'One steals the broom. The rest cram themselves into household appliances. All of them think this is fucking hilarious.' },
+      { id: 'chaos', kicker: 'THE MACHINE HAS SELECTED: MORE DAD', title: 'Oh, for fuck’s sake.', text: 'The machine won’t send him back. It just keeps sending him out. Same face. Zero shame.' },
+      { id: 'escape', kicker: 'CONTAINMENT STATUS: LAUGHING AT YOU', title: 'The house is now his problem.', text: 'One steals the broom. The rest cram themselves into appliances. Every idiot thinks this is fucking hilarious.' },
       { id: 'dispatch', kicker: 'GOVERNMENT BUREAU OF TEMPORAL NONSENSE', title: `Detective ${detective}, you’re up.`, text: `Your equipment: one stick, one sack. Your deadline: three minutes. Bag as many ${father}s as you can. The overtime request has already been rejected.` },
     ],
   };

@@ -122,6 +122,7 @@ test('background recovery honours wall time and one-hour hard expiry', () => {
 test('bagging the entire randomized cast ends early and permanently closes scoring', () => {
   const f = fixture(), count = f.session.getSnapshot().targets.length;
   const broom = f.session.getSnapshot().targets.find(t => t.kind === 'broom')!;
+  walkTo(f.session, broomPosition(broom, 0));
   assert.equal(f.session.spot(broom.id).ok, true); assert.equal(f.session.catch(broom.id).ok, true);
   for (const target of f.session.getSnapshot().targets.filter(t => t.kind === 'hidden')) {
     const slot = HOUSE.slots.find(s => s.id === target.slotId)!;

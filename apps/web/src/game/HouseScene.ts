@@ -82,6 +82,7 @@ export class HouseScene extends Phaser.Scene {
       const pose = slot?.behavior === 'statue' ? 'liberty' : slot?.behavior === 'feet' ? 'feet' : slot?.behavior === 'cramped' ? 'cramped' : target.kind === 'broom' ? 'broom' : 'stand';
       const texture = slot?.behavior === 'portrait' ? 'father' : slot?.behavior === 'spin' ? `spin-${slot.kind}` : `father-${pose}`;
       const dad = this.add.image(slot?.target.x ?? HOUSE.spawn.x, slot?.target.y ?? HOUSE.spawn.y, texture, 0).setVisible(false).setDepth(slot ? slot.prop.y + slot.prop.h + 1 : 1750);
+      if (slot?.behavior === 'statue') dad.setDepth(1801);
       this.dads.set(target.id, dad);
     }
     this.captureDad = this.add.image(0, 0, 'father-caught', father.expressions.laugh).setVisible(false).setDepth(2100);
@@ -196,9 +197,10 @@ export class HouseScene extends Phaser.Scene {
     for (const target of state.targets.filter(t => !t.claimedBy)) {
       const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)! : null;
       const ground = target.kind === 'broom' ? broomPosition(target, Date.now() - state.startedAt) : slot!.anchor;
-      if (slot ? slot.roomId !== state.player.roomId || !isDadExposed(state, slot, Date.now()) : roomAt(ground) !== state.player.roomId) continue;
+      if (slot ? slot.behavior !== 'statue' && slot.roomId !== state.player.roomId || !isDadExposed(state, slot, Date.now()) : roomAt(ground) !== state.player.roomId) continue;
       const centre = this.targetPoint(target.id), size = Math.max(64, 48 / this.cameras.main.zoom);
       if (contains({ x: centre.x - size / 2, y: centre.y - size / 2, w: size, h: size }, point)) {
+        if (slot?.behavior === 'statue') { this.walkTo(slot.anchor, { type: 'catch', targetId: target.id }); return; }
         const result = this.bridge.session.spot(target.id);
         if (result.ok) this.walkTo(ground, { type: 'catch', targetId: target.id });
         else this.bridge.feedback(result);
@@ -214,7 +216,7 @@ export class HouseScene extends Phaser.Scene {
     const state = this.bridge.session.getSnapshot(), player = state.player.position;
     if (action.type === 'search') return canReach(player, HOUSE.slots.find(s => s.id === action.slotId)!);
     const target = state.targets.find(t => t.id === action.targetId)!;
-    if (target.kind === 'hidden') return canReach(player, HOUSE.slots.find(s => s.id === target.slotId)!);
+    if (target.kind === 'hidden') { const slot = HOUSE.slots.find(s => s.id === target.slotId)!; return canReach(player, slot) && distance(player, slot.anchor) < 22; }
     const position = broomPosition(target, Date.now() - state.startedAt);
     return state.player.roomId === roomAt(position) && distance(position, player) < 88 && clearPath(player, position, 4);
   }
@@ -249,6 +251,7 @@ export class HouseScene extends Phaser.Scene {
   private sync() {
     const state = this.bridge.session.getSnapshot();
     this.stopped = state.status !== 'playing';
+    this.cameras.main.setFollowOffset(state.player.roomId === 'hall' && state.player.score === 0 ? 65 : 0, 35);
     this.cameras.main.setLerp(this.bridge.reducedMotion ? 1 : .12, this.bridge.reducedMotion ? 1 : .12);
     for (const [id, fog] of this.fog) fog.setVisible(id !== state.player.roomId);
     for (const slot of HOUSE.slots) {
@@ -284,7 +287,7 @@ export class HouseScene extends Phaser.Scene {
       const revealed = state.opened.includes(slot.id) || state.spotted.includes(target.id);
       const permanent = slot.mode === 'visible' || slot.behavior === 'spin';
       const progress = revealed || permanent ? 1 : slot.mode === 'peek' ? peekProgress(state.seed, slot, now - state.startedAt) : 0;
-      dad.setVisible(state.status === 'playing' && state.player.roomId === slot.roomId && progress > 0);
+      dad.setVisible(state.status === 'playing' && (state.player.roomId === slot.roomId || slot.behavior === 'statue') && progress > 0);
       if (!dad.visible) continue;
       const serious = slot.behavior === 'portrait' || slot.behavior === 'statue';
       if (slot.behavior === 'spin') {
@@ -326,7 +329,7 @@ export class HouseScene extends Phaser.Scene {
       else dad.setPosition(Phaser.Math.Linear(floor.x, bag.x, hop), Phaser.Math.Linear(floor.y, bag.y, hop) - Math.sin(hop * Math.PI) * 50).setAngle(hop * side * 42);
     }
     if (p >= .22 && p < .62) {
-      const impact = { x: floor.x - side * 18, y: floor.y + 15 }, swing = Math.max(0, Math.min(1, (p - .33) / .12));
+      const impact = { x: floor.x - side * 23, y: floor.y + 17 }, swing = Math.max(0, Math.min(1, (p - .33) / .12));
       const tip = this.bridge.reducedMotion ? impact : { x: Phaser.Math.Linear(hand.x - side * 23, impact.x, swing), y: Phaser.Math.Linear(hand.y - 44, impact.y, swing) };
       this.captureFX.lineStyle(6, 0x76512e).lineBetween(hand.x, hand.y, tip.x, tip.y);
       this.captureFX.lineStyle(2, 0xdbaf70).lineBetween(hand.x, hand.y - 1, tip.x, tip.y - 1);

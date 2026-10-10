@@ -25,3 +25,9 @@
 @media(max-width:760px){.bag-summary{padding:14px 0}.dad-tally>span{height:31px}}
 
 .father-field{display:flex;align-items:center;gap:9px;border:1px solid #d5d7c7;border-radius:8px;padding:0 14px;background:#fffdf6;max-width:380px;margin-bottom:22px}.father-field span{font:italic 18px Georgia;color:#7b846d}.father-field input{border:0;min-width:0;width:100%;padding:13px 0;background:transparent;color:var(--ink);font-size:16px}.poster-name{text-transform:uppercase;overflow-wrap:anywhere;font-size:clamp(20px,2.4vw,31px);letter-spacing:2px}.poster-name span{text-transform:none}.suspect>div:last-child{min-width:0}.suspect h2{overflow-wrap:anywhere}.hunt-title{overflow-wrap:anywhere;min-width:0}.hunt-title span{flex-shrink:0}
+/* Short phones keep the result actions in reach, including long player names. */
+.result-card,.small-modal{max-height:calc(100dvh - 34px);overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:600px) and (max-height:640px){.result-card{padding:19px 18px}.result-card>.dad-portrait{width:88px;margin:4px auto}.result-card h2{font-size:25px;margin-bottom:9px}.result-card>p{font-size:11px;line-height:1.5}.result-stats{margin:15px 0;gap:24px}.result-stats strong{font-size:27px}.result-player{font-size:11px;padding:10px;margin-bottom:13px}.result-card .button{font-size:12px;min-height:46px;padding:12px}.result-card .text-button{padding:11px;font-size:11px}}
+
+.opening-coach{top:auto;bottom:113px}
+.room-chip{left:auto;right:12px}

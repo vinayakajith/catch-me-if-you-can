@@ -122,6 +122,8 @@ async function waitForBag(page, count) {
 }
 
 async function catchBroom(page, mobile) {
+  const start = await page.evaluate(() => window.__huntTest.session.getSnapshot().targets.find(t=>t.kind==='broom').route[0].from);
+  await page.evaluate(p=>window.__huntTest.walk(p),start); await waitForArrival(page,start);
   const point = await page.evaluate(() => window.__huntTest.face('broom-dad'));
   await tapWorld(page, point, mobile);
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().targets.find(t => t.kind === 'broom').claimedBy);
@@ -181,6 +183,7 @@ async function checkCatalogue(browser) {
     }
     await start(page, 'Catalogue', best.seed);
     let score = 0;
+    best.slots.sort((a, b) => HOUSE.slots.findIndex(s => s.id === a) - HOUSE.slots.findIndex(s => s.id === b));
     for (const id of best.slots) {
       const slot = HOUSE.slots.find(s => s.id === id);
       await page.evaluate(p => window.__huntTest.walk(p), slot.anchor);
@@ -199,6 +202,61 @@ async function checkCatalogue(browser) {
   await context.close();
 }
 
+async function checkEdges(browser) {
+  const context = await browser.newContext({ ...devices['iPhone 13'], viewport: { width: 320, height: 568 }, reducedMotion: 'no-preference' });
+  const page = await context.newPage();
+  await page.clock.install();
+  await start(page, 'Edge detective', fixtureSeed, { fatherName: 'Suresh' });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Small portrait fits');
+  const statue = HOUSE.slots.find(s => s.kind === 'statue');
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.roomId), 'hall');
+  assert.equal(await page.evaluate(() => window.__huntTest.scene.dads.get(window.__huntTest.session.getSnapshot().targets.find(t=>t.kind==='hidden'&&t.slotId==='living-statue').id).visible), true, 'Spotlight Dad is visible immediately');
+  await tapWorld(page, statue.target, true);
+  await page.waitForFunction(() => window.__huntTest.presentation().busy, undefined, { timeout: 15000 });
+  await page.waitForTimeout(595);
+  await page.screenshot({ path: new URL('small-phone-backside-whack.png', artifacts).pathname });
+  await waitForBag(page, 1);
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.roomId), 'living', 'A tap on the lit statue walks through the doorway');
+  assert.equal(await page.locator('.hud-stat').count(), 2, 'Only time and the actual bag count are shown');
+  await page.clock.fastForward(180001);
+  await page.locator('.result-card').waitFor();
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().finishReason), 'timeout');
+  assert.match(await page.locator('.result-player').innerText(), /caught 1 Suresh in 3 minutes/);
+  const card = await page.locator('.result-card').boundingBox();
+  assert.ok(card.y >= 0 && card.y + card.height <= 568, 'Result card fits a short phone');
+  const again = await page.getByRole('button', {name:/Take another case/}).boundingBox();
+  assert.ok(again.y >= 0 && again.y + again.height <= 568, 'Replay is immediately reachable');
+  await page.screenshot({ path: new URL('small-phone-timeout.png', artifacts).pathname });
+  await context.close();
+  console.log('PASS small phone: immediate spotlight catch, automatic approach, backside impact, background deadline');
+
+  const faults = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+  const missing = await faults.newPage();
+  await missing.route('**/assets/time-machine-lab.png', route => route.abort());
+  await start(missing, 'Fallback', fixtureSeed);
+  assert.equal(await missing.evaluate(() => window.__huntTest.session.getSnapshot().status), 'playing');
+  await missing.close();
+  const broken = await faults.newPage();
+  await broken.route('**/assets/balaji-heads.png', route => route.abort());
+  await broken.goto(baseURL); await broken.locator('#player-name').fill('No art'); await broken.getByRole('button', { name: /Let’s find dad/ }).click();
+  await broken.locator('.intro-error').waitFor();
+  assert.equal(await broken.getByRole('button', { name: 'Skip intro & hunt', exact: true }).isDisabled(), true);
+  await broken.getByRole('button', { name: 'Reload the house', exact: true }).waitFor();
+  await broken.close();
+  const slow = await faults.newPage();
+  await slow.route('**/assets/balaji-heads.png', async route => { await sleep(1800); await route.continue(); });
+  await slow.goto(`${baseURL}/?test=1`, {waitUntil:'domcontentloaded'}); await slow.locator('#player-name').fill('Patient'); await slow.getByRole('button', { name: /Let’s find dad/ }).click();
+  await slow.getByRole('dialog').waitFor();
+  await slow.waitForFunction(()=>window.__huntTest?.session.getSnapshot().status==='ready');
+  await slow.waitForTimeout(1200);
+  assert.equal(await slow.evaluate(()=>window.__huntTest.session.getSnapshot().status),'ready');
+  for(let i=0;i<12;i++){await slow.keyboard.press('Tab');assert.equal(await slow.evaluate(()=>document.querySelector('[role="dialog"]').contains(document.activeElement)),true);}
+  await slow.getByRole('button',{name:'Skip intro & hunt',exact:true}).click();
+  assert.ok(await slow.evaluate(()=>window.__huntTest.session.getSnapshot().endsAt-Date.now()>179000));
+  await faults.close();
+  console.log('PASS lab fallback, failed character recovery, slow art, keyboard focus and full timer after loading');
+}
+
 try {
   if (!await available()) {
     if (process.env.FATHER_HUNTER_URL) throw new Error('FATHER_HUNTER_URL is not reachable');
@@ -208,7 +266,9 @@ try {
     if (!await available()) throw new Error(`Dev server did not start:\n${output}`);
   }
   browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
-  if (process.env.FATHER_HUNTER_CATALOGUE === '1') {
+  if (process.env.FATHER_HUNTER_EDGES === '1') {
+    await checkEdges(browser);
+  } else if (process.env.FATHER_HUNTER_CATALOGUE === '1') {
     await checkCatalogue(browser);
   } else {
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
@@ -250,7 +310,7 @@ try {
   await phone.setViewportSize(devices['iPhone 13'].viewport);
   await phone.waitForTimeout(350);
   await finishHunt(phone, true);
-  console.log('PASS mobile: portrait layout, map navigation, six touch catches and sack animations, joystick, help, rotation, results, and replay');
+  console.log('PASS mobile: portrait layout, map navigation, every touch catch and sack animations, joystick, help, rotation, results, and replay');
   await mobile.close();
   }
   assert.deepEqual(errors, [], 'No unhandled browser errors');
