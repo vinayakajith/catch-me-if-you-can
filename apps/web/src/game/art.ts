@@ -67,6 +67,18 @@ export function hideoutSvg(kind: PropKind, open: boolean, foreground = false): s
     case 'curtain':
       back = rect(17, 14, 125, 10, '#ac8554', 3) + rect(24, 24, 112, 61, '#7b9c86', 5);
       front = rect(23, 26, 114, 52, '#89aa93', 23) + `<path d="M48 34v34m32-34v34m31-34v34" stroke="#4f796d"/>` + ellipse(27, 51, 14, 26, '#bdd0b2'); break;
+    case 'statue':
+      back = ellipse(80, 137, 69, 16, '#b4a16d') + rect(22, 119, 116, 25, '#d8c494', 3) + rect(34, 105, 91, 21, '#eee1b6', 3);
+      front = rect(22, 134, 116, 12, '#ab905f', 2) + rect(55, 123, 52, 15, '#8d7752', 2) + `<text x="81" y="134" text-anchor="middle" stroke="none" fill="#f5e6b8" font-family="serif" font-size="8">NOT A DAD</text>`; break;
+    case 'microwave':
+      back = rect(4, 29, 152, 115, '#a6b1a0', 9) + rect(11, 41, 112, 85, '#465850', 4) + rect(19, 51, 94, 57, '#626251', 2) + ellipse(67, 108, 42, 7, '#c5c4a4') + rect(130, 46, 18, 20, '#506b56', 2) + ellipse(138, 86, 6, 6, '#e0bd73') + ellipse(138, 108, 6, 6, '#bf7858');
+      front = `<path d="M11 41h112v85H11zM19 51v57h94V51z" fill="#6f8075" fill-rule="evenodd"/>` + (open ? `<path d="M9 45L0 35V127L9 120" fill="#bfd0b8"/>` : rect(19, 51, 94, 57, '#91c7bd22', 2) + `<path d="M23 57L77 101M54 54L108 95" stroke="#e6f4db" stroke-width="3" opacity=".2"/>` + rect(115, 62, 6, 35, '#d8d0aa', 2)); break;
+    case 'bed':
+      back = rect(15, 19, 130, 124, '#825d45', 8) + rect(24, 104, 113, 43, '#423f33', 2);
+      front = rect(12, 8, 136, 108, '#ab7e87', 7) + rect(17, 16, 126, 29, '#f1e4c8', 6) + rect(21, 50, 118, 58, '#b38990', 4) + `<path d="M22 72h116M22 95h116M44 51v55M79 51v55M112 51v55" stroke="#e0bdbe" stroke-width="6"/>` + rect(14, 107, 132, 15, '#987052', 2) + rect(18, 121, 13, 27, '#987052', 2) + rect(130, 121, 13, 27, '#987052', 2); break;
+    case 'wardrobe':
+      back = rect(18, 7, 126, 141, '#98714e', 4) + rect(28, 18, 105, 116, '#524b3c', 2) + `<path d="M34 31H128" stroke="#b5a17a"/>`;
+      front = open ? `<path d="M22 18L3 4V139L22 132M138 18L157 4V139L138 132" fill="#b18a5d"/>` + rect(21, 132, 118, 12, '#c8a16e', 1) : rect(25, 15, 55, 120, '#b58c61', 3) + rect(82, 15, 54, 120, '#b58c61', 3) + line(70, 65, 70, 84) + line(92, 65, 92, 84) + `<path d="M37 29V115M124 29V115" stroke="#cca873"/>`; break;
     case 'portrait':
       back = rect(18, 9, 126, 139, '#a0774d', 4) + rect(30, 22, 101, 113, '#b1bfa0', 2) + `<path d="M32 102l27-31 28 27 18-18 23 25v26H32z" fill="#819174" stroke="none"/>`;
       front = `<path d="M18 9h126v139H18zM31 23v110h99V23z" fill="#c19b62" fill-rule="evenodd"/>` + `<path d="M24 15h113v126H24z" fill="none" stroke="#edd49c"/>`; break;
@@ -102,7 +114,7 @@ export function hideoutSvg(kind: PropKind, open: boolean, foreground = false): s
     case 'washer':
       back = rect(19, 11, 122, 139, '#d2d8bf', 11) + rect(26, 18, 108, 27, '#ece6cc', 4) + ellipse(116, 31, 8, 8, '#788c7b') + ellipse(81, 98, 45, 43, '#7f9e93') + ellipse(81, 98, 33, 33, dark);
       front = `<path d="M36 98a45 43 0 1 0 90 0a45 43 0 1 0-90 0m11 0a34 32 0 1 1 68 0a34 32 0 1 1-68 0" fill="#ecdfbd" fill-rule="evenodd"/>`;
-      if (!open) back += ellipse(81, 98, 33, 33, '#91b0a6') + line(60, 80, 99, 109, '#c9d9c6');
+      if (!open) front += ellipse(81, 98, 33, 33, '#91b0a622') + `<path d="M60 80L99 109" stroke="#c9d9c6" opacity=".3"/>`;
       else back += `<path d="M28 60q-40 33 0 72" fill="none" stroke="#afbea5" stroke-width="10"/>`; break;
     case 'bucket':
       back = `<path d="M30 45h102l-14 99H43z" fill="#779c98"/>` + ellipse(81, 45, 52, 17, '#b4c9be') + ellipse(81, 45, 42, 11, dark);

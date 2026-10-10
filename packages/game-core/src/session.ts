@@ -1,31 +1,28 @@
-import { HOUSE, canReach, isWalkable, roomAt } from './house.ts';
+import { HOUSE, canReach, isWalkable, roomAt, distance } from './house.ts';
+import { broomPosition, createBroomRoute } from './broom.ts';
+import { clearPath } from './navigation.ts';
 import { random, shuffled } from './random.ts';
 import { createFatherProfile, createTimeMachineCase } from './cases.ts';
 import { isDadExposed } from './peeking.ts';
 import type { ActionResult, Activity, CharacterPack, HuntSession, HuntSnapshot, Point, Target } from './types.ts';
 
-export const ROUND_MS = 10 * 60 * 1000;
+export const ROUND_MS = 3 * 60 * 1000;
 export const EXPIRY_MS = 60 * 60 * 1000;
 export const SEARCH_MS = 1000;
-export const HINT_MS = 60 * 1000;
+export const HINT_MS = 20 * 1000;
 
-export const TARGET_COUNT = 6;
 export function placeTargets(seed: string): Target[] {
-  const rng = random(seed);
-  // Backtracking over a shuffled catalogue guarantees the constraints without retry limits.
+  const rng = random(seed), count = 12 + Math.floor(rng() * 9);
   const candidates = shuffled(HOUSE.slots, rng);
-  const select = (from: number, chosen: typeof candidates): typeof candidates | undefined => {
-    if (chosen.length === TARGET_COUNT) return new Set(chosen.map(s => s.roomId)).size >= 4 ? chosen : undefined;
-    for (let i = from; i < candidates.length; i++) {
-      const slot = candidates[i];
-      if (chosen.filter(s => s.mode === slot.mode).length >= 3 || chosen.filter(s => s.roomId === slot.roomId).length >= 2) continue;
-      const result = select(i + 1, [...chosen, slot]);
-      if (result) return result;
-    }
-  };
-  return select(0, [])!.map((s, i) => ({ id: `dad-${i + 1}`, slotId: s.id, claimedBy: null, claimedAt: null }));
+  // A spotlighted deadpan statue is the welcoming easy catch. Other disguises
+  // shuffle, with at least one hidden target in every room and one broom rider.
+  const chosen = [HOUSE.slots.find(s => s.kind === 'statue')!];
+  for (const room of HOUSE.rooms.filter(r => r.id !== 'hall' && r.id !== 'living')) chosen.push(candidates.find(s => s.roomId === room.id)!);
+  for (const slot of candidates) if (chosen.length < count - 1 && !chosen.includes(slot)) chosen.push(slot);
+  const hidden: Target[] = chosen.map((s, i) => ({ kind: 'hidden', id: `dad-${i + 1}`, slotId: s.id, claimedBy: null, claimedAt: null }));
+  return [...hidden, { kind: 'broom', id: 'broom-dad', route: createBroomRoute(seed, ROUND_MS), lockedPosition: null, claimedBy: null, claimedAt: null }];
 }
-const signature = (seed: string) => placeTargets(seed).map(t => t.slotId).sort().join('|');
+const signature = (seed: string) => placeTargets(seed).filter(t => t.kind === 'hidden').map(t => t.slotId).sort().join('|');
 export function freshHuntSeed(previous: string | undefined, entropy: string): string {
   let seed = entropy, attempt = 0;
   while (previous && signature(seed) === signature(previous)) seed = `${entropy}-${++attempt}`;
@@ -77,7 +74,7 @@ export class LocalHuntSession implements HuntSession {
       this.state = { ...this.state, search: null };
       if (canReach(this.state.player.position, slot)) {
         this.state = { ...this.state, opened: [...this.state.opened, slot.id] };
-        const occupied = this.state.targets.some(t => t.slotId === slot.id && !t.claimedBy);
+        const occupied = this.state.targets.some(t => t.kind === 'hidden' && t.slotId === slot.id && !t.claimedBy);
         this.addActivity(occupied ? `${this.state.father.name} uncovered.` : 'Checked. Empty.', 'search', slot.id);
       }
       changed = true;
@@ -113,42 +110,60 @@ export class LocalHuntSession implements HuntSession {
     this.emit();
     return { ok: true, message: slot.kind === 'toilet' ? 'Opening the commode lid…' : `Checking the ${slot.name}…`, kind: 'search', slotId };
   }
-  spot(slotId: string): ActionResult {
+  spot(targetId: string): ActionResult {
     this.tick();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
-    const slot = HOUSE.slots.find(s => s.id === slotId);
-    const target = this.state.targets.find(t => t.slotId === slotId && !t.claimedBy);
-    if (!slot || !target || slot.roomId !== this.state.player.roomId || !isDadExposed(this.state, slot, this.clock())) return this.error('Check the furniture to uncover him.');
-    if (!this.state.spotted.includes(slotId)) { this.state = { ...this.state, spotted: [...this.state.spotted, slotId] }; this.emit(); }
-    return { ok: true, message: '', kind: 'spot', slotId };
+    const target = this.state.targets.find(t => t.id === targetId);
+    if (!target || target.claimedBy) return this.error('Already gone. Keep looking.');
+    if (target.kind === 'hidden') {
+      const slot = HOUSE.slots.find(s => s.id === target.slotId)!;
+      if (slot.roomId !== this.state.player.roomId || !isDadExposed(this.state, slot, this.clock())) return this.error('Check the furniture to uncover him.');
+    } else {
+      const position = broomPosition(target, this.clock() - this.state.startedAt);
+      if (roomAt(position) !== this.state.player.roomId) return this.error('Walk into his room first.');
+      this.state = { ...this.state, targets: this.state.targets.map(t => t.id === targetId ? { ...target, lockedPosition: position } : t) };
+    }
+    if (!this.state.spotted.includes(targetId)) this.state = { ...this.state, spotted: [...this.state.spotted, targetId] };
+    this.emit();
+    return { ok: true, message: '', kind: 'spot', targetId };
   }
-  catch(slotId: string): ActionResult {
+  catch(targetId: string): ActionResult {
     this.tick();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
-    const slot = HOUSE.slots.find(s => s.id === slotId);
-    if (!slot || !canReach(this.state.player.position, slot)) return this.error('Get a little closer. No catching through walls!');
-    const target = this.state.targets.find(t => t.slotId === slotId);
+    const target = this.state.targets.find(t => t.id === targetId);
     if (!target) return this.error('Suspicious, but not your father.');
     if (target.claimedBy) return this.error('Already caught. One dad, one point.');
-    if (!isDadExposed(this.state, slot, this.clock())) return this.error(`Check it first to uncover ${this.state.father.name}.`);
+    let location: string, slotId: string | undefined;
+    if (target.kind === 'hidden') {
+      const slot = HOUSE.slots.find(s => s.id === target.slotId)!;
+      if (!canReach(this.state.player.position, slot)) return this.error('Get a little closer. No catching through walls!');
+      if (!isDadExposed(this.state, slot, this.clock())) return this.error(`Check it first to uncover ${this.state.father.name}.`);
+      const room = HOUSE.rooms.find(r => r.id === slot.roomId)!;
+      slotId = slot.id;
+      location = slot.kind === 'toilet' ? 'inside the commode' : `by the ${slot.name} in the ${room.name.toLowerCase()}`;
+    } else {
+      const position = broomPosition(target, this.clock() - this.state.startedAt), player = this.state.player.position;
+      if (!target.lockedPosition || roomAt(position) !== this.state.player.roomId || distance(position, player) > 100 || !clearPath(player, position, 4)) return this.error('Tap the broom rider and walk over to bag him.');
+      location = 'joyriding on a broom';
+    }
     const now = this.clock();
     this.state = { ...this.state, lastCatchAt: now,
       targets: this.state.targets.map(t => t.id === target.id ? { ...t, claimedBy: this.state.player.id, claimedAt: now } : t),
       player: { ...this.state.player, score: this.state.player.score + 1 } };
-    const room = HOUSE.rooms.find(r => r.id === slot.roomId)!;
-    this.addActivity(`${this.state.player.name} found ${this.state.father.name} ${slot.kind === 'toilet' ? 'inside the commode' : `by the ${slot.name} in the ${room.name.toLowerCase()}`}.`, 'catch', slotId);
+    this.addActivity(`${this.state.player.name} found ${this.state.father.name} ${location}.`, 'catch', slotId);
     if (this.state.targets.every(t => t.claimedBy)) this.finish('complete');
     this.emit();
-    return { ok: true, message: '', kind: 'catch', slotId };
+    return { ok: true, message: '', kind: 'catch', targetId, slotId };
   }
   hint(): ActionResult {
     this.tick();
     const now = this.clock();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
-    if (now - this.state.lastCatchAt < HINT_MS || now - this.lastHintAt < HINT_MS) return this.error('Give your detective instincts a minute.');
+    if (now - this.state.lastCatchAt < HINT_MS || now - this.lastHintAt < HINT_MS) return this.error('Give your detective instincts a moment.');
     const target = this.state.targets.find(t => !t.claimedBy);
     if (!target) return this.error('All dads accounted for.');
-    const room = HOUSE.rooms.find(r => r.id === HOUSE.slots.find(s => s.id === target.slotId)!.roomId)!;
+    const roomId = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)!.roomId : roomAt(broomPosition(target, now - this.state.startedAt));
+    const room = HOUSE.rooms.find(r => r.id === roomId)!;
     this.lastHintAt = now;
     const message = `A suspicious dad noise came from the ${room.name.toLowerCase()}.`;
     this.addActivity(message, 'hint'); this.emit();

@@ -40,16 +40,16 @@ function Landing({ onStart }: { onStart: (name: string, fatherName: string) => v
       <section className="hero">
         <div className="hero-copy">
           <div className="eyebrow"><span className="tiny-star">✳</span> A GOVERNMENT-SIZED SCREW-UP</div>
-          <h1>One dad.<br />Six copies.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
-          <p className="hero-description">Dad built a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the detective sent to bag all six.</p>
+          <h1>One dad.<br />Too many copies.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
+          <p className="hero-description">Dad put witchcraft in a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the detective sent to clean up the shitshow.</p>
           <form className="start-form" onSubmit={submit}>
-            <label htmlFor="father-name">WHO’S THE MAD SCIENTIST?</label>
+            <label htmlFor="father-name">WHO’S THE WITCH-SCIENTIST?</label>
             <div className="father-field"><span>Dr.</span><input id="father-name" name="fatherName" autoComplete="off" maxLength={32} value={fatherName} onChange={e => setFatherName(e.target.value)} required /></div>
             <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, DETECTIVE?</label>
             <div className="start-fields"><input id="player-name" name="name" autoComplete="given-name" placeholder="Your name" maxLength={24} value={name} onChange={e => setName(e.target.value)} required /><button className="button primary" type="submit">Let’s find dad <ArrowRight size={20} /></button></div>
             <div className="start-note"><Check size={14} /> No signup. No gaming skills. Just suspicious instincts.</div>
           </form>
-          <div className="hero-stats"><span><Home size={17} /><b>5</b> rooms</span><span><Search size={17} /><b>6</b> dads</span><span><Clock3 size={17} /><b>10</b> minutes</span></div>
+          <div className="hero-stats"><span><Home size={17} /><b>5</b> rooms</span><span><Search size={17} /><b>1</b> sack</span><span><Clock3 size={17} /><b>3</b> minutes</span></div>
         </div>
         <div className="hero-art" aria-label={`Wanted poster for ${father.name}`}>
           <div className="scribble scribble-top">peer review: absolutely not <span>↴</span></div>
@@ -59,8 +59,8 @@ function Landing({ onStart }: { onStart: (name: string, fatherName: string) => v
             <div className="wanted-title">WANTED FOR<br />ILLEGAL SCIENCE</div>
             <div className="portrait-stage"><div className="portrait-grid" /><Dad character={father} /><span className="portrait-bubble">“I see no flaws<br />in my work.”</span></div>
             <div className="poster-name">{father.name}<span>Dr. is a self-awarded title.</span></div>
-            <p>Six copies. Absolutely no impulse control.<br />May be hiding in your commode.</p>
-            <div className="poster-stamp">6 COPIES · 0 PERMITS</div>
+            <p>Illegal copies. Absolutely no impulse control.<br />May be hiding in your commode.</p>
+            <div className="poster-stamp">TOO MANY DADS · 0 PERMITS</div>
           </article>
           <div className="little-label"><span>✳</span><div>GOVERNMENT EQUIPMENT<strong>One sack. Budget cuts.</strong></div></div>
           <span className="art-star star-one">✳</span><span className="art-star star-two">✧</span>
@@ -70,7 +70,7 @@ function Landing({ onStart }: { onStart: (name: string, fatherName: string) => v
         <div className="how-grid">
           <article><div className="how-icon"><Footprints size={27} /><span>01</span></div><h3>Tap. Take a little walk.</h3><p>Tap the floor to wander through the house. Every doorway is a new bad alibi.</p></article>
           <article><div className="how-icon green"><DoorOpen size={27} /><span>02</span></div><h3>Be a little suspicious.</h3><p>Check the furniture. Open the lids. That pickle jar might contain an upside-down dad.</p></article>
-          <article><div className="how-icon yellow"><MousePointer2 size={27} /><span>03</span></div><h3>See dad? Tap dad.</h3><p>Your detective scoops him into a sack. Six dads. One increasingly suspicious bag.</p></article>
+          <article><div className="how-icon yellow"><MousePointer2 size={27} /><span>03</span></div><h3>See dad? Tap dad.</h3><p>One comic whack. Into the sack. Catch as many as you can before your three minutes run out.</p></article>
         </div>
       </section>
     </main>
@@ -92,7 +92,7 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
   const feedback = useCallback((result: ActionResult) => {
     if (result.kind === 'hint' || result.kind === 'error') showToast(result.message);
   }, [showToast]);
-  const bridge = useMemo<GameBridge>(() => ({ session, movement: { x: 0, y: 0 }, inputEnabled: true, reducedMotion: preferences.reducedMotion, feedback, ready: () => setReady(true), bagged: count => { setBagged(count); playSound('catch', preferencesRef.current.sound); }, failed: setError }), [session, feedback]);
+  const bridge = useMemo<GameBridge>(() => ({ session, movement: { x: 0, y: 0 }, inputEnabled: true, reducedMotion: preferences.reducedMotion, feedback, ready: () => setReady(true), bonk: () => playSound('bonk', preferencesRef.current.sound), bagged: count => { setBagged(count); playSound('catch', preferencesRef.current.sound); }, failed: setError }), [session, feedback]);
   bridge.reducedMotion = preferences.reducedMotion;
   const latestActivity = state.activity[0];
   useEffect(() => {
@@ -107,7 +107,6 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
   }, [session, bridge]);
   useEffect(() => { if (state.player.score > 0) { const timer = setTimeout(() => setCoachDismissed(true), 6500); return () => clearTimeout(timer); } }, [state.player.score]);
   const room = HOUSE.rooms.find(r => r.id === state.player.roomId)!;
-  const remaining = state.targets.length - state.player.score;
   const ended = state.status === 'finished' || state.status === 'expired';
   const resultsVisible = ended && bagged >= state.player.score;
   bridge.inputEnabled = ready && accepted && !ended && !leaving && !help && !mapOpen;
@@ -128,7 +127,7 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
     document.addEventListener('keydown', trap);
     return () => { document.removeEventListener('keydown', trap); previous?.focus(); };
   }, [accepted, ready, resultsVisible, leaving, help, mapOpen]);
-  const coach = state.player.score > 0 ? 'In the bag. Explore the other rooms for the remaining dads.' : state.opened.some(id => state.targets.some(t => t.slotId === id)) ? 'Tap the face. Your detective will scoop him into the sack.' : state.player.roomId !== 'hall' ? 'Tap furniture to check inside. If a face peeks out, tap it.' : 'Tap a doorway, or choose a room on the map. Your detective walks there.';
+  const coach = state.player.score > 0 ? 'In the bag. Keep checking the other rooms.' : state.opened.some(id => state.targets.some(t => t.kind === 'hidden' && t.slotId === id)) ? 'Tap the face. Your detective will walk over and bag him.' : state.player.roomId !== 'hall' ? 'Tap furniture to check inside. If a face peeks out, tap it.' : 'Tap a doorway, or choose a room on the map. Your detective walks there.';
   const navigate = (point: Point) => { bridge.navigate?.(point); setMapOpen(false); };
 
   return <div className={`hunt-shell ${preferences.reducedMotion ? 'reduced-motion' : ''}`}>
@@ -142,7 +141,7 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
       <div className="hunt-topline"><div><span className="eyebrow">OPERATION: FIND YOUR FATHER</span><h1>He’s in here. <em>Somewhere.</em></h1></div><p>Check the obvious. Then check the embarrassing.</p></div>
       <div className="hunt-layout">
         <section className="play-area" aria-label="Hunt">
-          <div className="hud"><div className={`hud-stat timer ${state.endsAt - state.now < 60000 ? 'urgent' : ''}`}><Clock3 /><span><small>TIME LEFT</small><strong>{formatTime(state.endsAt - state.now)}</strong></span></div><div className="hud-stat"><Search /><span><small>STILL HIDING</small><strong>{remaining}<i> copies</i></strong></span></div><div className="hud-stat your-score"><ShoppingBag /><span><small>BAGGED</small><strong>{bagged}<i> / 6</i></strong></span></div><button className="map-toggle icon-button" aria-label="Open house map" onClick={() => setMapOpen(true)}><Map size={21} /></button></div>
+          <div className="hud"><div className={`hud-stat timer ${state.endsAt - state.now < 60000 ? 'urgent' : ''}`}><Clock3 /><span><small>TIME LEFT</small><strong>{formatTime(state.endsAt - state.now)}</strong></span></div><div className="hud-stat your-score"><ShoppingBag /><span><small>BAGGED</small><strong>{bagged}</strong></span></div><button className="map-toggle icon-button" aria-label="Open house map" onClick={() => setMapOpen(true)}><Map size={21} /></button></div>
           <div className="game-frame">
             <GameCanvas bridge={bridge} />
             <div className="room-chip"><Home size={15} /><span>{room.name}</span></div>
@@ -155,17 +154,17 @@ function Round({ name, seed, father, preferences, togglePreference, onLeave, onR
         </section>
         {mapOpen && <button className="map-backdrop" aria-label="Close map" onClick={() => setMapOpen(false)} />}
         <aside className={`case-file ${mapOpen ? 'is-open' : ''}`} role={mapOpen && !ended ? 'dialog' : undefined} aria-modal={mapOpen && !ended ? true : undefined} aria-labelledby="case-file-title"><div className="case-file-heading"><span className="eyebrow" id="case-file-title">YOUR CASE FILE</span><button className="map-close icon-button" aria-label="Close map" onClick={() => setMapOpen(false)}><X size={19} /></button></div>
-          <div className="suspect"><div className="suspect-photo"><Dad character={father} expression={1} /></div><div><small>PERSON OF INTEREST</small><h2>{father.name}</h2><p>Six copies. Zero impulse control.</p></div></div>
-          <div className="dad-tally" aria-label={`${bagged} of 6 fathers bagged`}>{Array.from({ length: 6 }, (_, i) => <span key={i} className={i < bagged ? 'caught' : ''}>{i < bagged ? <Check size={15} /> : <span className="mini-moustache">⌁</span>}</span>)}</div>
+          <div className="suspect"><div className="suspect-photo"><Dad character={father} expression={1} /></div><div><small>PERSON OF INTEREST</small><h2>{father.name}</h2><p>Witch-scientist. Zero impulse control.</p></div></div>
+
           <div className="map-heading"><span>THE HOUSE</span><small>Tap a room to walk there</small></div><HouseMap snapshot={state} navigate={navigate} />
           <div className="map-key"><span className="player-dot" /> You are here <span>·</span> {room.name}</div>
-          <div className="bag-summary" aria-live="polite"><ShoppingBag size={27} /><div><strong>{bagged} / 6 in the sack</strong><span>{bagged === 0 ? 'Room for six. Somehow.' : bagged === 6 ? 'Deliver to temporal containment.' : 'Getting heavier. Still portable.'}</span></div></div>
-          <button className="hint-button" disabled={state.now - state.lastCatchAt < HINT_MS || ended} onClick={() => feedback(session.hint())}><Lightbulb size={17} /> A tiny hint?<ArrowRight size={16} /></button><p className="hint-note">Room hints unlock after a minute without a catch.</p>
+          <div className="bag-summary" aria-live="polite"><ShoppingBag size={27} /><div><strong>{bagged} in the sack</strong><span>{bagged === 0 ? 'Suspiciously roomy government sack.' : 'Getting heavier. Still portable.'}</span></div></div>
+          <button className="hint-button" disabled={state.now - state.lastCatchAt < HINT_MS || ended} onClick={() => feedback(session.hint())}><Lightbulb size={17} /> A tiny hint?<ArrowRight size={16} /></button><p className="hint-note">Room hints unlock after 20 seconds without a catch.</p>
         </aside>
       </div>
     </main>
     {!accepted && <CaseIntro story={story} father={father} ready={ready} error={error} sound={preferences.sound} reducedMotion={preferences.reducedMotion} toggleSound={() => { unlockSound(); togglePreference('sound'); }} toggleMotion={() => togglePreference('reducedMotion')} onStart={() => setAccepted(true)} onLeave={onLeave} />}
-    {resultsVisible && <div className="modal-backdrop"><section className="result-card" role="dialog" aria-modal="true" aria-labelledby="result-title"><span className="eyebrow">{state.finishReason === 'complete' ? 'CASE CLOSED. SACK FULL.' : 'CONTAINMENT WINDOW CLOSED.'}</span><Dad character={father} expression={state.finishReason === 'complete' ? 4 : 5} /><h2 id="result-title">{state.finishReason === 'complete' ? 'Six dads. One sack.' : state.player.score >= 6 ? 'Dad’s worst nightmare.' : 'A suspicious beginning.'}</h2><p>{state.finishReason === 'complete' ? 'Six unstable idiots. One very unhappy sack. The government calls that a promotion.' : `${remaining} copies of ${father.name} remain at large. The government would like its sack back.`}</p><div className="result-stats"><div><strong>{state.player.score}<small>/ 6</small></strong><span>COPIES BAGGED</span></div><div><strong>{formatTime(Math.min(state.now, state.endsAt) - state.startedAt)}</strong><span>TIME SPENT SNOOPING</span></div></div><div className="result-player"><Trophy size={19} /><strong>{state.player.name}</strong><span>{state.player.score} points</span></div><button className="button primary" onClick={onReplay}>Take another case <ArrowRight size={19} /></button><button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> Back to the notice board</button></section></div>}
+    {resultsVisible && <div className="modal-backdrop"><section className="result-card" role="dialog" aria-modal="true" aria-labelledby="result-title"><span className="eyebrow">{state.finishReason === 'complete' ? 'CASE CLOSED. SACK FULL.' : 'CONTAINMENT WINDOW CLOSED.'}</span><Dad character={father} expression={state.finishReason === 'complete' ? 4 : 5} /><h2 id="result-title">{state.finishReason === 'complete' ? 'Case closed. Sack full.' : state.player.score >= 6 ? 'Dad’s worst nightmare.' : 'A suspicious beginning.'}</h2><p>{state.finishReason === 'complete' ? 'A house cleared of idiots. One very unhappy sack. The government calls that a promotion.' : 'Your shift is over. The government would like its sack back.'}</p><div className="result-stats"><div><strong>{state.player.score}</strong><span>COPIES BAGGED</span></div><div><strong>{formatTime(Math.min(state.now, state.endsAt) - state.startedAt)}</strong><span>TIME SPENT SNOOPING</span></div></div><div className="result-player"><Trophy size={19} /><span><strong>{state.player.name}</strong> caught {state.player.score} {father.name}{state.player.score === 1 ? '' : 's'} in {state.finishReason === 'complete' ? formatTime(state.now - state.startedAt) : '3 minutes'}.</span></div><button className="button primary" onClick={onReplay}>Take another case <ArrowRight size={19} /></button><button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> Back to the notice board</button></section></div>}
     {leaving && !ended && <div className="modal-backdrop"><section className="small-modal" role="dialog" aria-modal="true" aria-labelledby="leave-title"><h2 id="leave-title">Let dad get away?</h2><p>This hunt will end. You can always start another investigation.</p><button className="button primary" onClick={() => setLeaving(false)}>Keep looking</button><button className="text-button" onClick={onLeave}>Leave this hunt</button></section></div>}
     {help && !ended && <div className="modal-backdrop"><section className="small-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title"><button className="icon-button modal-close" aria-label="Close help" onClick={() => setHelp(false)}><X /></button><span className="eyebrow">DETECTIVE TRAINING, AGAIN</span><h2 id="help-title">Just tap. Be curious.</h2><p><Footprints /> Tap the floor or a room on the map to walk there.</p><p><DoorOpen /> Tap furniture to check it. Open lids. Investigate weird corners.</p><p><MousePointer2 /> See a face? Tap it. Your detective walks over and bags him, even if he ducks away.</p><div className="help-note">The timer keeps ticking while you investigate. Keyboard arrows, WASD, and the joystick work too.</div><button className="button primary" onClick={() => setHelp(false)}>Got it. Where’s dad? <ArrowRight size={18} /></button></section></div>}
   </div>;

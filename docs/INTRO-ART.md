@@ -1,3 +1,5 @@
+> Current animation: five beats (invention → entrance → duplicates → escape → dispatch), driven by one 15-second clock on a shared SVG stage. Reduced motion advances manual stills; pause preserves elapsed time. The original background and its doorway foreground crop share one coordinate system. The cast has no announced total. Current face art and the reusable lungi rig are documented in [DESI-ART.md](DESI-ART.md). Historical generation notes follow.
+
 # Time-machine intro
 
 The case has three scenes: the scientist walks into a homemade time machine, six hyperactive copies escape, and a government detective is assigned to bag them. The first two scenes last about thirteen seconds together. The player can advance or skip immediately, pause, replay, mute, or use reduced motion. The dispatch screen waits for an explicit start. Intro and loading time never consume hunt time.
