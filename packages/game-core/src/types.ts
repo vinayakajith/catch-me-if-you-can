@@ -12,7 +12,10 @@ export interface HidingSlot extends HouseProp {
 }
 export interface HouseDefinition { id: string; width: number; height: number; rooms: RoomDefinition[]; passages: Rect[]; props: HouseProp[]; slots: HidingSlot[]; spawn: Point }
 export type Expression = 'serious' | 'grin' | 'laugh' | 'giggle' | 'bonked' | 'dizzy';
-export interface CharacterPack { id: string; name: string; atlas: string; columns: number; rows: number; expressions: Record<Expression, number> }
+export interface CharacterPack {
+  id: string; name: string; atlas: string; columns: number; rows: number; expressions: Record<Expression, number>;
+  version?: 1; palette?: { skin: string }; expiresAt?: number;
+}
 export interface TargetBase { id: string; claimedBy: string | null; claimedAt: number | null }
 export interface HiddenTarget extends TargetBase { kind: 'hidden'; slotId: string }
 export interface BroomLeg { from: Point; to: Point; departAt: number; arriveAt: number }
