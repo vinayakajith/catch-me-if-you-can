@@ -60,6 +60,7 @@ export class LocalHuntSession implements HuntSession {
     return session;
   }
   getSnapshot = () => this.state;
+  time = () => this.clock();
   start() {
     if (this.state.status !== 'ready') return;
     const now = this.clock();

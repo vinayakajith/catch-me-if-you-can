@@ -31,17 +31,20 @@ export interface HuntSnapshot {
   player: { id: string; name: string; position: Point; roomId: RoomId; score: number };
   targets: Target[]; opened: string[]; spotted: string[]; search: { slotId: string; startedAt: number; endsAt: number } | null;
   activity: Activity[];
+  connection?: 'online' | 'reconnecting' | 'replaced';
+  connectionMessage?: string;
 }
 export interface ActionResult { ok: boolean; message: string; kind: 'catch' | 'search' | 'spot' | 'hint' | 'error'; slotId?: string; targetId?: string }
 export interface HuntSession {
-  start(): void;
+  start(): void | Promise<void>;
+  time(): number;
   getSnapshot(): HuntSnapshot;
   subscribe(listener: () => void): () => void;
   move(direction: Point, deltaMs: number): void;
-  search(slotId: string): ActionResult;
-  spot(targetId: string): ActionResult;
-  catch(targetId: string): ActionResult;
-  hint(): ActionResult;
+  search(slotId: string): ActionResult | Promise<ActionResult>;
+  spot(targetId: string): ActionResult | Promise<ActionResult>;
+  catch(targetId: string): ActionResult | Promise<ActionResult>;
+  hint(): ActionResult | Promise<ActionResult>;
   tick(): void;
   dispose(): void;
 }

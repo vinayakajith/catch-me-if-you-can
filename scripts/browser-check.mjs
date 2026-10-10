@@ -20,7 +20,7 @@ async function start(page, name, seed = fixtureSeed, options = {}) {
   await page.goto(`${baseURL}/?test=1&seed=${encodeURIComponent(seed)}`, { waitUntil: 'networkidle' });
   await page.getByLabel('WHAT SHOULD WE CALL YOU, DETECTIVE?').fill(name);
   await page.getByLabel('WHO’S THE WITCH-SCIENTIST?').fill(options.fatherName || 'Balaji');
-  await page.getByRole('button', { name: /Let’s find dad/ }).click();
+  await page.getByRole('button', { name: 'Play solo', exact: true }).click();
   await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
   await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready', undefined, { timeout: 20000 });
   await page.waitForTimeout(1100);
@@ -238,14 +238,14 @@ async function checkEdges(browser) {
   await missing.close();
   const broken = await faults.newPage();
   await broken.route('**/assets/balaji-heads.png', route => route.abort());
-  await broken.goto(baseURL); await broken.locator('#player-name').fill('No art'); await broken.getByRole('button', { name: /Let’s find dad/ }).click();
+  await broken.goto(baseURL); await broken.locator('#player-name').fill('No art'); await broken.getByRole('button', { name: 'Play solo', exact: true }).click();
   await broken.locator('.intro-error').waitFor();
   assert.equal(await broken.getByRole('button', { name: 'Skip intro & hunt', exact: true }).isDisabled(), true);
   await broken.getByRole('button', { name: 'Reload the house', exact: true }).waitFor();
   await broken.close();
   const slow = await faults.newPage();
   await slow.route('**/assets/balaji-heads.png', async route => { await sleep(1800); await route.continue(); });
-  await slow.goto(`${baseURL}/?test=1`, {waitUntil:'domcontentloaded'}); await slow.locator('#player-name').fill('Patient'); await slow.getByRole('button', { name: /Let’s find dad/ }).click();
+  await slow.goto(`${baseURL}/?test=1`, {waitUntil:'domcontentloaded'}); await slow.locator('#player-name').fill('Patient'); await slow.getByRole('button', { name: 'Play solo', exact: true }).click();
   await slow.getByRole('dialog').waitFor();
   await slow.waitForFunction(()=>window.__huntTest?.session.getSnapshot().status==='ready');
   await slow.waitForTimeout(1200);

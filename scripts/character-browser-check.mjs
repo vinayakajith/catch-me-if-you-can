@@ -86,7 +86,7 @@ try {
     assert.equal(provider.calls.length, before + 6, 'Lost finalize response does not regenerate');
     await page.getByLabel('WHO’S THE WITCH-SCIENTIST?').fill('Vijayan');
     await page.getByLabel('WHAT SHOULD WE CALL YOU, DETECTIVE?').fill(mobile ? 'Mobile' : 'Desktop');
-    await page.getByRole('button', { name: /Let’s find dad/ }).click();
+    await page.getByRole('button', { name: 'Play solo', exact: true }).click();
     await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready');
     const father = await page.evaluate(() => window.__huntTest.session.getSnapshot().father);
     assert.equal(father.id, id); assert.equal(father.name, 'Vijayan'); assert.equal(father.palette.skin, '#865437');

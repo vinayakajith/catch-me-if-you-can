@@ -11,7 +11,7 @@ export interface GameBridge {
   inputEnabled: boolean;
   feedback(result: ActionResult): void;
   ready(): void;
-  bagged?(count: number): void;
+  bagged?(count: number, restored?: boolean): void;
   bonk?(): void;
   failed(message: string): void;
   inspect?: () => void;
@@ -36,6 +36,8 @@ export class HouseScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private stopped = false;
   private previousPosition: Point = HOUSE.spawn;
+  private acting = false;
+  private layoutId = '';
   private loaded = true;
   private sack!: Phaser.GameObjects.Image;
   private captureFX!: Phaser.GameObjects.Graphics;
@@ -76,14 +78,6 @@ export class HouseScene extends Phaser.Scene {
       this.props.set(item.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, `${item.kind}${open ? '-open' : ''}`).setDisplaySize(p.w, p.h).setDepth(p.y + p.h));
       if (!slot) continue;
       this.rims.set(slot.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, `${slot.kind}-front${open ? '-open' : ''}`).setDisplaySize(p.w, p.h).setDepth(p.y + p.h + 2));
-    }
-    for (const target of this.bridge.session.getSnapshot().targets) {
-      const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)! : null;
-      const pose = slot?.behavior === 'statue' ? 'liberty' : slot?.behavior === 'feet' ? 'feet' : slot?.behavior === 'cramped' ? 'cramped' : target.kind === 'broom' ? 'broom' : 'stand';
-      const texture = slot?.behavior === 'portrait' ? 'father' : slot?.behavior === 'spin' ? `spin-${slot.kind}` : `father-${pose}`;
-      const dad = this.add.image(slot?.target.x ?? HOUSE.spawn.x, slot?.target.y ?? HOUSE.spawn.y, texture, 0).setVisible(false).setDepth(slot ? slot.prop.y + slot.prop.h + 1 : 1750);
-      if (slot?.behavior === 'statue') dad.setDepth(1801);
-      this.dads.set(target.id, dad);
     }
     this.captureDad = this.add.image(0, 0, 'father-caught', father.expressions.laugh).setVisible(false).setDepth(2100);
     this.sack = this.add.image(HOUSE.spawn.x + 25, HOUSE.spawn.y - 6, 'sack').setOrigin(.5, 1).setDisplaySize(30, 34).setDepth(1999);
@@ -190,18 +184,21 @@ export class HouseScene extends Phaser.Scene {
     return target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)!.target : { x: this.dads.get(target.id)!.x, y: this.dads.get(target.id)!.y - 12 };
   }
 
-  private tap(point: Point) {
-    if (!this.bridge.inputEnabled || this.capturing) return;
+  private async tap(point: Point) {
+    if (!this.bridge.inputEnabled || this.capturing || this.acting) return;
     const state = this.bridge.session.getSnapshot();
     if (state.status !== 'playing') return;
     for (const target of state.targets.filter(t => !t.claimedBy)) {
       const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)! : null;
-      const ground = target.kind === 'broom' ? broomPosition(target, Date.now() - state.startedAt) : slot!.anchor;
-      if (slot ? slot.behavior !== 'statue' && slot.roomId !== state.player.roomId || !isDadExposed(state, slot, Date.now()) : roomAt(ground) !== state.player.roomId) continue;
+      const ground = target.kind === 'broom' ? broomPosition(target, this.bridge.session.time() - state.startedAt) : slot!.anchor;
+      if (slot ? slot.behavior !== 'statue' && slot.roomId !== state.player.roomId || !isDadExposed(state, slot, this.bridge.session.time()) : roomAt(ground) !== state.player.roomId) continue;
       const centre = this.targetPoint(target.id), size = Math.max(64, 48 / this.cameras.main.zoom);
       if (contains({ x: centre.x - size / 2, y: centre.y - size / 2, w: size, h: size }, point)) {
         if (slot?.behavior === 'statue') { this.walkTo(slot.anchor, { type: 'catch', targetId: target.id }); return; }
-        const result = this.bridge.session.spot(target.id);
+        this.acting = true;
+        const result = await this.bridge.session.spot(target.id);
+        this.acting = false;
+        if (!this.scene.isActive()) return;
         if (result.ok) this.walkTo(ground, { type: 'catch', targetId: target.id });
         else this.bridge.feedback(result);
         return;
@@ -217,7 +214,7 @@ export class HouseScene extends Phaser.Scene {
     if (action.type === 'search') return canReach(player, HOUSE.slots.find(s => s.id === action.slotId)!);
     const target = state.targets.find(t => t.id === action.targetId)!;
     if (target.kind === 'hidden') { const slot = HOUSE.slots.find(s => s.id === target.slotId)!; return canReach(player, slot) && distance(player, slot.anchor) < 22; }
-    const position = broomPosition(target, Date.now() - state.startedAt);
+    const position = broomPosition(target, this.bridge.session.time() - state.startedAt);
     return state.player.roomId === roomAt(position) && distance(position, player) < 88 && clearPath(player, position, 4);
   }
 
@@ -232,24 +229,39 @@ export class HouseScene extends Phaser.Scene {
     this.destination.setPosition(end.x, end.y).setVisible(true);
   }
 
-  private perform() {
+  private async perform() {
     const action = this.pending; this.pending = undefined;
     if (!action) return;
     const point = action.type === 'search' ? HOUSE.slots.find(s => s.id === action.slotId)!.target : this.targetPoint(action.targetId);
     this.hunter.setFlipX(point.x < this.bridge.session.getSnapshot().player.position.x);
-    this.bridge.feedback(action.type === 'search' ? this.bridge.session.search(action.slotId) : this.bridge.session.catch(action.targetId));
+    this.acting = true;
+    const result = await (action.type === 'search' ? this.bridge.session.search(action.slotId) : this.bridge.session.catch(action.targetId));
+    this.acting = false;
+    if (this.scene.isActive()) this.bridge.feedback(result);
   }
 
-  private inspectNearest() {
-    if (!this.bridge.inputEnabled || this.capturing) return;
+  private async inspectNearest() {
+    if (!this.bridge.inputEnabled || this.capturing || this.acting) return;
     const state = this.bridge.session.getSnapshot();
     const near = HOUSE.slots.filter(s => canReach(state.player.position, s) && !state.opened.includes(s.id)).sort((a, b) => distance(a.anchor, state.player.position) - distance(b.anchor, state.player.position))[0];
-    if (near) { this.hunter.setFlipX(near.target.x < state.player.position.x); this.bridge.feedback(this.bridge.session.search(near.id)); }
+    if (near) { this.hunter.setFlipX(near.target.x < state.player.position.x); this.acting = true; const result = await this.bridge.session.search(near.id); this.acting = false; if (this.scene.isActive()) this.bridge.feedback(result); }
     else this.bridge.feedback({ ok: false, kind: 'error', message: 'Tap some furniture to walk over and check it.' });
   }
 
   private sync() {
     const state = this.bridge.session.getSnapshot();
+    if (this.layoutId !== state.id) {
+      this.layoutId = state.id;
+      for (const dad of this.dads.values()) dad.destroy(); this.dads.clear(); this.reacted.clear(); this.opened.clear();
+      this.bagCount = state.player.score; this.bridge.bagged?.(this.bagCount, true);
+      for (const target of state.targets) {
+        const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId)! : null;
+        const pose = slot?.behavior === 'statue' ? 'liberty' : slot?.behavior === 'feet' ? 'feet' : slot?.behavior === 'cramped' ? 'cramped' : target.kind === 'broom' ? 'broom' : 'stand';
+        const texture = slot?.behavior === 'portrait' ? 'father' : slot?.behavior === 'spin' ? `spin-${slot.kind}` : `father-${pose}`;
+        const dad = this.add.image(slot?.target.x ?? HOUSE.spawn.x, slot?.target.y ?? HOUSE.spawn.y, texture, 0).setVisible(false).setDepth(slot?.behavior === 'statue' ? 1801 : slot ? slot.prop.y + slot.prop.h + 1 : 1750);
+        this.dads.set(target.id, dad); if (target.claimedBy) this.reacted.add(target.id);
+      }
+    }
     this.stopped = state.status !== 'playing';
     this.cameras.main.setFollowOffset(state.player.roomId === 'hall' && state.player.score === 0 ? 65 : 0, 35);
     this.cameras.main.setLerp(this.bridge.reducedMotion ? 1 : .12, this.bridge.reducedMotion ? 1 : .12);
@@ -267,7 +279,7 @@ export class HouseScene extends Phaser.Scene {
       }
     }
     for (const target of state.targets) if (target.claimedBy && !this.reacted.has(target.id)) { this.reacted.add(target.id); this.react(target); }
-    this.animateDads(Date.now());
+    this.animateDads(this.bridge.session.time());
   }
 
   private animateDads(now: number) {
@@ -305,7 +317,7 @@ export class HouseScene extends Phaser.Scene {
   private react(target: Target) {
     this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 };
     const from = this.targetPoint(target.id);
-    this.capturing = { targetId: target.id, from: { ...from }, startedAt: Date.now(), score: this.bridge.session.getSnapshot().player.score, bonked: false };
+    this.capturing = { targetId: target.id, from: { ...from }, startedAt: this.bridge.session.time(), score: this.bridge.session.getSnapshot().player.score, bonked: false };
     this.captureDad.setPosition(from.x, from.y).setFrame(this.bridge.session.getSnapshot().father.expressions.laugh).setAlpha(1).setVisible(true).setAngle(0);
     this.destination.setVisible(false);
   }
@@ -350,7 +362,7 @@ export class HouseScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (!this.hunter || !this.loaded) return;
     this.bridge.session.tick();
-    const now = Date.now();
+    const now = this.bridge.session.time();
     this.animateDads(now);
     this.animateCapture(now); // Also settle a last capture after a tab was in the background.
     const stateBefore = this.bridge.session.getSnapshot();
@@ -365,7 +377,7 @@ export class HouseScene extends Phaser.Scene {
       this.searchBar.fillStyle(0x303e33, .9).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 30, slot.prop.y - 14, 60, 8, 4);
       this.searchBar.fillStyle(0xf4c86e).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 28, slot.prop.y - 12, 56 * progress, 4, 2);
     }
-    if (!this.bridge.inputEnabled || this.capturing) {
+    if (!this.bridge.inputEnabled || this.capturing || this.acting) {
       this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 }; this.destination.setVisible(false); return;
     }
     const k = this.keys;
