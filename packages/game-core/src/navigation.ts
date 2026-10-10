@@ -1,19 +1,21 @@
 import { HOUSE, distance, isWalkable } from './house.ts';
 import type { Point } from './types.ts';
 
+// Keep routes clear of exact collision boundaries so a fractional turn cannot snag a door.
 const CELL = 16;
+const ROUTE_RADIUS = 14;
 const cols = Math.ceil(HOUSE.width / CELL);
 const rows = Math.ceil(HOUSE.height / CELL);
 let grid: Uint8Array | undefined;
 const pointAt = (n: number): Point => ({ x: n % cols * CELL, y: Math.floor(n / cols) * CELL });
 function cells(): Uint8Array {
-  if (!grid) { grid = new Uint8Array(cols * rows); for (let n = 0; n < grid.length; n++) grid[n] = Number(isWalkable(pointAt(n))); }
+  if (!grid) { grid = new Uint8Array(cols * rows); for (let n = 0; n < grid.length; n++) grid[n] = Number(isWalkable(pointAt(n), ROUTE_RADIUS)); }
   return grid;
 }
 
-export function clearPath(a: Point, b: Point): boolean {
+export function clearPath(a: Point, b: Point, radius = 12): boolean {
   const steps = Math.max(1, Math.ceil(distance(a, b) / 6));
-  for (let i = 0; i <= steps; i++) if (!isWalkable({ x: a.x + (b.x - a.x) * i / steps, y: a.y + (b.y - a.y) * i / steps })) return false;
+  for (let i = 0; i <= steps; i++) if (!isWalkable({ x: a.x + (b.x - a.x) * i / steps, y: a.y + (b.y - a.y) * i / steps }, radius)) return false;
   return true;
 }
 
@@ -32,7 +34,7 @@ function nearest(p: Point): number {
 
 /** Routes through the same collision geometry used by movement. No teleporting. */
 export function findPath(from: Point, to: Point): Point[] {
-  if (clearPath(from, to)) return [to];
+  if (clearPath(from, to, ROUTE_RADIUS)) return [to];
   const available = cells(), start = nearest(from), goal = nearest(to);
   if (start < 0 || goal < 0) return [];
   const previous = new Int32Array(available.length).fill(-1);
@@ -44,7 +46,7 @@ export function findPath(from: Point, to: Point): Point[] {
     const x = n % cols;
     for (const next of [x > 0 ? n - 1 : -1, x < cols - 1 ? n + 1 : -1, n - cols, n + cols]) {
       if (next < 0 || next >= available.length || !available[next] || previous[next] >= 0) continue;
-      if (!clearPath(pointAt(n), pointAt(next))) continue;
+      if (!clearPath(pointAt(n), pointAt(next), ROUTE_RADIUS)) continue;
       previous[next] = n; queue[tail++] = next;
     }
   }
@@ -57,7 +59,7 @@ export function findPath(from: Point, to: Point): Point[] {
   let current = from, index = 0;
   while (index < route.length) {
     let farthest = index;
-    while (farthest + 1 < route.length && clearPath(current, route[farthest + 1])) farthest++;
+    while (farthest + 1 < route.length && clearPath(current, route[farthest + 1], ROUTE_RADIUS)) farthest++;
     smooth.push(route[farthest]); current = route[farthest]; index = farthest + 1;
   }
   return smooth;

@@ -8,7 +8,8 @@ Human acceptance:
 
 - A player with no gaming background can start, move, investigate, and catch without coaching.
 - A first-time player finds at least one father in the first minute and understands why harder clues were discoverable.
-- The commode lid reveal is readable and funny at phone size.
+- The commode lid, upside-down jar, giant vase, and scoop into the sack are readable and funny at phone size.
+- A quick case brief makes the six copies feel like one ridiculous investigation. Replays change the story and occupied hideouts.
 - Portrait touch controls, text, and targets are usable on an actual phone. No forced rotation.
 - At least a few friends want to try another hunt. Revise hiding difficulty or reactions based on what they actually do.
 

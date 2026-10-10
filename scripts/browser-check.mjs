@@ -2,6 +2,7 @@ import { chromium, devices } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { HOUSE, placeTargets } from '../packages/game-core/src/index.ts';
 
 const baseURL = process.env.FATHER_HUNTER_URL || 'http://127.0.0.1:5173';
 const artifacts = new URL('../artifacts/', import.meta.url);
@@ -13,12 +14,27 @@ async function available() {
   try { return (await fetch(baseURL, { signal: AbortSignal.timeout(1000) })).ok; } catch { return false; }
 }
 
-async function start(page, name) {
+async function start(page, name, seed = 'browser-56') {
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(`${baseURL}/?test=1`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseURL}/?test=1&seed=${encodeURIComponent(seed)}`, { waitUntil: 'networkidle' });
   await page.getByLabel('WHAT SHOULD WE CALL YOU, DETECTIVE?').fill(name);
   await page.getByRole('button', { name: /Let’s find dad/ }).click();
-  await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing', undefined, { timeout: 20000 });
+  await page.getByRole('button', { name: 'Take the case', exact: true }).waitFor();
+  await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready', undefined, { timeout: 20000 });
+  await page.waitForTimeout(1100);
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().status), 'ready', 'Case story does not start the timer');
+  await page.screenshot({ path: new URL(`${name}-case.png`, artifacts).pathname });
+  await page.getByRole('button', { name: 'Take the case', exact: true }).click();
+  await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
+  assert.ok(await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - Date.now() > 599000), 'Taking the case grants the full ten minutes');
+  assert.equal(await page.locator('.activity-list').count(), 0, 'No mid-game gossip feed');
+  const transparent = await page.evaluate(async () => {
+    const img = new Image(); img.src = '/assets/detective-poses.png'; await img.decode();
+    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(0, 0, 1, 1).data[3];
+  });
+  assert.equal(transparent, 0, 'Detective atlas has genuine transparent alpha');
   await page.getByRole('button', { name: 'Dismiss guidance' }).click();
 }
 
@@ -51,10 +67,18 @@ async function commode(page, mobile) {
   await page.screenshot({ path: new URL(mobile ? 'mobile-commode.png' : 'desktop-commode.png', artifacts).pathname });
   await tapWorld(page, await page.evaluate(id => window.__huntTest.face(id), slot.id), mobile);
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().player.score === 1);
+  await page.waitForTimeout(150);
   await page.screenshot({ path: new URL(mobile ? 'mobile-catch.png' : 'desktop-catch.png', artifacts).pathname });
+  await waitForBag(page, 1);
+  assert.equal(await page.locator('.toast').count(), 0, 'A catch has no Balaji dialogue');
+}
+
+async function waitForBag(page, count) {
+  await page.waitForFunction(count => window.__huntTest.presentation().bagged === count && !window.__huntTest.presentation().busy, count);
 }
 
 async function finishHunt(page, mobile = false) {
+  const before = await page.evaluate(() => window.__huntTest.session.getSnapshot());
   const targets = await page.evaluate(() => window.__huntTest.session.getSnapshot().targets.filter(t => !t.claimedBy).map(t => window.__huntTest.slots.find(s => s.id === t.slotId)));
   for (const slot of targets) {
     await page.evaluate(p => window.__huntTest.walk(p), slot.anchor);
@@ -62,16 +86,65 @@ async function finishHunt(page, mobile = false) {
     if (slot.mode === 'search') {
       await tapWorld(page, { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h / 2 }, mobile);
       await page.waitForFunction(id => window.__huntTest.session.getSnapshot().opened.includes(id), slot.id);
-      await page.waitForTimeout(450);
+    } else {
+      // Wait for a real visible peek, then use an actual mouse/touch event on the canvas.
+      await page.waitForFunction(id => {
+        const dad = window.__huntTest.scene.children.list.find(o => o.texture?.key === 'balaji' && o.x === window.__huntTest.slots.find(s => s.id === id).target.x && o.visible);
+        return dad && dad.alpha > .95;
+      }, slot.id);
     }
-    await tapWorld(page, slot.mode === 'search' ? await page.evaluate(id => window.__huntTest.face(id), slot.id) : { x: slot.hit.x + slot.hit.w / 2, y: slot.hit.y + slot.hit.h / 2 }, mobile);
+    if (['kitchen-jar', 'living-vase'].includes(slot.id)) await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-${slot.id}.png`, artifacts).pathname });
+    await tapWorld(page, await page.evaluate(id => window.__huntTest.face(id), slot.id), mobile);
     await page.waitForFunction(id => window.__huntTest.session.getSnapshot().targets.some(t => t.slotId === id && t.claimedBy), slot.id);
+    const score = await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score);
+    if (score === 6) assert.equal(await page.getByRole('heading', { name: 'Six dads. One sack.' }).count(), 0, 'Final capture is visible before results');
+    await waitForBag(page, score);
   }
-  await page.getByRole('heading', { name: 'Absolutely dad-icated.' }).waitFor();
-  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score), 12);
+  await page.getByRole('heading', { name: 'Six dads. One sack.' }).waitFor();
+  assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score), 6);
   await page.screenshot({ path: new URL(mobile ? 'mobile-results.png' : 'desktop-results.png', artifacts).pathname });
-  await page.getByRole('button', { name: /Hide him again/ }).click();
-  await page.waitForFunction(() => window.__huntTest.session.getSnapshot().player.score === 0 && window.__huntTest.session.getSnapshot().seed !== 'welcome-home');
+  await page.getByRole('button', { name: /Take another case/ }).click();
+  await page.getByRole('button', { name: 'Take the case', exact: true }).waitFor();
+  const after = await page.evaluate(() => window.__huntTest.session.getSnapshot());
+  assert.equal(after.status, 'ready'); assert.equal(after.player.score, 0);
+  assert.deepEqual(after.opened, []); assert.deepEqual(after.spotted, []);
+  assert.notEqual(after.seed, before.seed); assert.notEqual(after.case.id, before.case.id);
+  assert.notDeepEqual(after.targets.map(t => t.slotId).sort(), before.targets.map(t => t.slotId).sort());
+  await page.getByRole('button', { name: 'Take the case', exact: true }).click();
+  await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
+  assert.equal(await page.evaluate(() => window.__huntTest.presentation().bagged), 0);
+}
+
+async function checkCatalogue(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  const ids = process.env.FATHER_HUNTER_HIDEOUTS?.split(',') ?? HOUSE.slots.map(s => s.id);
+  assert.ok(ids.every(id => HOUSE.slots.some(s => s.id === id)), 'Requested hideouts exist');
+  const remaining = new Set(ids), total = remaining.size;
+  while (remaining.size) {
+    let best = { seed: '', slots: [] };
+    for (let i = 0; i < 2000; i++) {
+      const seed = `catalogue-${i}`, slots = placeTargets(seed).map(t => t.slotId).filter(id => remaining.has(id));
+      if (slots.length > best.slots.length) best = { seed, slots };
+    }
+    await start(page, 'Catalogue', best.seed);
+    let score = 0;
+    for (const id of best.slots) {
+      const slot = HOUSE.slots.find(s => s.id === id);
+      await page.evaluate(p => window.__huntTest.walk(p), slot.anchor);
+      await waitForArrival(page, slot.anchor);
+      // CHECK also opens a peeker's prop, allowing a stable view of every layered pose.
+      await page.getByRole('button', { name: 'Check nearby furniture', exact: true }).click();
+      await page.waitForFunction(id => window.__huntTest.session.getSnapshot().opened.includes(id), id);
+      await page.locator('canvas').screenshot({ path: new URL(`hideout-${id}.png`, artifacts).pathname });
+      await tapWorld(page, await page.evaluate(id => window.__huntTest.face(id), id));
+      await page.waitForFunction(id => window.__huntTest.session.getSnapshot().targets.some(t => t.slotId === id && t.claimedBy), id);
+      await waitForBag(page, ++score);
+      remaining.delete(id);
+      console.log(`PASS hideout ${id} (${total - remaining.size}/${total})`);
+    }
+  }
+  await context.close();
 }
 
 try {
@@ -83,6 +156,9 @@ try {
     if (!await available()) throw new Error(`Dev server did not start:\n${output}`);
   }
   browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
+  if (process.env.FATHER_HUNTER_CATALOGUE === '1') {
+    await checkCatalogue(browser);
+  } else {
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const page = await desktop.newPage();
   await page.goto(baseURL); await page.screenshot({ path: new URL('desktop-home.png', artifacts).pathname, fullPage: true });
@@ -90,7 +166,7 @@ try {
   await page.screenshot({ path: new URL('desktop-house.png', artifacts).pathname });
   await commode(page, false);
   await finishHunt(page);
-  console.log('PASS desktop: start, navigation, commode reveal, all twelve catches, results, and replay');
+  console.log('PASS desktop: start, navigation, commode reveal, all six catches and sack animations, results, and replay');
   await desktop.close();
 
   const mobile = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'no-preference' });
@@ -120,8 +196,9 @@ try {
   await phone.setViewportSize(devices['iPhone 13'].viewport);
   await phone.waitForTimeout(350);
   await finishHunt(phone, true);
-  console.log('PASS mobile: portrait layout, map navigation, twelve touch catches, joystick, help, rotation, results, and replay');
+  console.log('PASS mobile: portrait layout, map navigation, six touch catches and sack animations, joystick, help, rotation, results, and replay');
   await mobile.close();
+  }
   assert.deepEqual(errors, [], 'No unhandled browser errors');
   console.log('Screenshots saved in artifacts/.');
 } catch (error) {
