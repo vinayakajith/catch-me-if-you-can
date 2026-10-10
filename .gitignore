@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+.sites-runtime/
+.npm/
+playwright-report/
+test-results/
+artifacts/
+*.log
