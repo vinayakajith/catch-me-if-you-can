@@ -22,7 +22,8 @@
     "test:characters": "node scripts/character-browser-check.mjs",
     "generation:cost": "node scripts/generation-cost.mjs",
     "preview": "npm run preview --workspace @father-hunter/web",
-    "test:multiplayer": "node scripts/multiplayer-browser-check.mjs"
+    "test:multiplayer": "node scripts/multiplayer-browser-check.mjs",
+    "test:load": "node scripts/multiplayer-load-check.mjs"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
