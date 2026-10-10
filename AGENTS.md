@@ -1,6 +1,7 @@
 # Catch Me If You Can working agreement
 
-- The local solo game, personal AI character flow, and five-player multiplayer rooms are implemented as described in README.md. Multiplayer was explicitly authorized: independent two-minute attempts, best scores across replays, one-hour rooms, and 24-hour final-score retention. Revenge chains and AWS deployment remain later phases.
+- The application and GitHub repository are named Catch Me If You Can. Preserve existing private storage and environment names for compatibility, especially the spending ledger. The playable character is the old violet witch; the named father is her idiot assistant.
+- Solo, personal AI characters, five-player rooms and fresh-game chains are implemented. Each player has independent two-minute hunts, best scores across replays, and one-hour rooms. Member-only room art and final scores remain for 24 more hours and can seed a new room. Serverless AWS adapters and CDK are ready for local verification. Actual AWS deployment, DNS changes and production image spending are a later user-authorized phase.
 - Mobile and players with no gaming background are primary: preserve tap-to-walk, simple interactions, readable clues, and the contextual commode-lid reveal.
 - Keep movement, collision, placement, scoring, and timing rules in packages/game-core. Keep renderer and UI details in apps/web.
 - Make small coherent commits frequently. Immediately run git push after every commit. The user explicitly requested this workflow. Preserve local commits and report the actual blocker if a push fails; never imply it succeeded.

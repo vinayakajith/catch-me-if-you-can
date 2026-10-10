@@ -1,45 +1,45 @@
-# Room architecture
+# Catch Me If You Can rooms
 
-The local API runs behind Vite’s same-origin `/api` proxy. A room contains at most five players, including its creator. Each player has an independent house and two-minute attempt. The leaderboard compares best scores across attempts during the room’s one-hour lifetime.
+A room has five seats including its creator, one named character and a one-hour lifetime. Each player has an independent house and two-minute attempts. The leaderboard compares best scores across replays. Any participant can create a separate game with a fresh invite and an empty board.
 
 ## Identity and storage
 
-An HTTP-only, same-site cookie identifies a browser. Only its SHA-256 digest is stored with players. Names are display labels, not authentication. Clearing the cookie loses that player’s seat; changing hostname creates a different browser identity. The five-seat cap applies for the invite’s lifetime.
+An HTTP-only, same-site browser cookie owns a seat. Only its SHA-256 digest is stored. Public hosting requires HTTPS and sets Secure cookies. Names are display labels; clearing cookies loses the seat. Reopening the same invite on the same hostname resumes the same identity. There is no account signup or recovery from another device.
 
-`Rooms` owns the application rules and accepts a `RoomStore`, `AssetStore`, and clock. The local room adapter uses SQLite with WAL, a busy timeout, private file permissions, and versioned conditional writes. A change reloads and retries on a revision conflict. Membership, a confirmed catch, the best score, and its event are saved together. The interface permits asynchronous storage so a future DynamoDB adapter need not change the game or renderer.
+`Rooms` accepts asynchronous `RoomStore`, `AssetStore` and `CharacterService` implementations. Local storage uses SQLite and private files. AWS uses DynamoDB transactions and private S3 objects. The shared rules validate movement, catches and deadlines in both environments.
 
-The aggregate stores a bounded recent event list and action receipts, plus each player’s latest attempt checkpoint. Checkpoints include target layout, reveals, sightings, movement, claims, timestamps, and hint cooldown. Restart restores deadlines and confirmed scores. A replay replaces only that player’s attempt and keeps their best score.
+DynamoDB stores separate `META`, `PLAYER`, `ATTEMPT` and `EVENT` items under each room partition. Movement updates only the caller’s attempt. Joining updates membership atomically; catches update the attempt, best score, cursor and event together. Conditional writes and bounded conflict retries prevent duplicate scores and sixth seats. A detached original snapshot makes nested checkpoint changes visible to the adapter. The recent event list is capped at 80 so expiry cleanup fits within a transaction.
 
-Creating a room from a ready character copies its atlas into room storage. The creator’s source photo and generation job remain private. Joined players can read the room atlas; anonymous visitors can only read the invite’s public metadata while the room is open.
+The browser merges shared revisions separately from the current attempt’s start time and acknowledged command number. A delayed poll cannot replace a newer movement acknowledgement or roll a replay back into its previous attempt. Lost responses retry the same command sequence and recover saved receipts.
 
 ## HTTP contract
 
-Mutations require the same-origin action header. Creation and starting an attempt also require an idempotency key, so retrying a lost response reuses the original operation.
+Mutations require `X-FH-Request: 1` and the exact configured HTTPS origin on public hosting. Room creation and attempt starts also require an idempotency key. Reusing one key with different room data returns a conflict.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /api/rooms` | Create an invite and reserve the host’s seat. |
-| `GET /api/rooms/config` | Select the LAN invite origin; environment override supported. |
-| `GET /api/rooms/:id` | Read room metadata and the caller’s permitted view. |
-| `POST /api/rooms/:id/join` | Atomically reserve a seat with a distinct name. |
-| `GET /api/rooms/:id/state?after=cursor` | Poll state and catch events newer than the cursor. |
+| `POST /api/rooms` | Create a room from `characterId` or a member-owned `sourceRoomId`. |
+| `GET /api/rooms/config` | Canonical public origin, or LAN address for local development. |
+| `GET /api/rooms/:id` | Public invite metadata and the caller’s permitted view. |
+| `POST /api/rooms/:id/join` | Reserve one of five seats with a distinct name. |
+| `GET /api/rooms/:id/state?after=cursor` | State, best scores and recent catch events. |
 | `POST /api/rooms/:id/attempts` | Start the caller’s two-minute attempt after intro/loading. |
-| `POST /api/rooms/:id/attempts/:attemptId/resume` | Rotate the controller token and resume the same deadline. |
-| `POST /api/rooms/:id/attempts/:attemptId/commands` | Apply an ordered batch of movement and interaction commands. |
-| `GET /api/rooms/:id/assets/atlas.png` | Read the shared character as a room member. |
+| `POST /api/rooms/:id/attempts/:attemptId/resume` | Rotate the controlling-tab token; preserve the deadline. |
+| `POST /api/rooms/:id/attempts/:attemptId/commands` | Ordered movement, search, spot, catch and hint commands. |
+| `GET /api/rooms/:id/assets/atlas.png` | Authorize membership, then serve or briefly sign the private atlas. |
 
-`NetworkHuntSession` predicts local movement, sends batches every 100 ms or immediately for an interaction, then reconciles server state. The server accepts directions and bounded time deltas, never supplied positions or scores. Movement credit accrues with server wall time and caps at 300 ms. Sequence numbers and saved action receipts prevent duplicate catches after a lost reply. A short, bounded visibility allowance lets a peeking face duck during the network trip; scoring deadlines remain strict.
+`NetworkHuntSession` predicts movement and sends pending commands every 100 ms, or immediately for an interaction. Clients supply directions and bounded time deltas, never positions or scores. Movement credit accrues using server time and caps at 300 ms. Visible clients poll every 500 ms; hidden tabs poll less often. Rate limiting and temporary conflicts cause bounded backoff. The timer keeps running during disconnections and background tabs.
 
-Visible clients poll every 500 ms; hidden tabs poll less frequently. Stale revisions are ignored. Scores animate into the sack only after confirmation. An outstanding catch receipt and the final capture animation settle before results appear. Disconnects freeze controls while time continues; reconnect retries pending commands. Resuming in another tab invalidates the previous controller token.
+## Fresh games and retention
 
-## Time and cleanup
+The room’s hour starts after its character copy is ready. No attempt starts with less than two minutes remaining. Replay preserves the room’s target count and exposure mix, includes all five rooms, reshuffles occupied hideouts, and keeps the best score.
 
-The room’s hour starts after its character copy is ready. Each player starts independently and has at most 120 seconds. Every replay retains the room’s selected target count and visible/search/peek mix, includes all five rooms, a spotlight statue, and a broom rider, and changes its placement signature.
+At closure, scoring and joining stop immediately. Cleanup removes active attempts and events. Final scores and member-only character artwork remain for 24 additional hours. **Create your own game** can reuse that artwork without an image call or choose another photo. Each new room owns a separate copy, one-hour window and board; deleting its parent does not delete the child.
 
-No attempt starts with less than two minutes remaining in the room. At one hour, mutation and asset routes deny access even before cleanup. Cleanup removes room art and active checkpoints; final best scores remain readable through the invite for 24 additional hours. After that, requests deny access and cleanup deletes the record. Startup and the running cleanup interval both enforce retention. The separate development image-spending ledger is never removed by room or job cleanup.
+At the end of retention, API access stops even if physical cleanup has not run yet. Local cleanup runs each minute and at startup. AWS EventBridge invokes cleanup each minute. DynamoDB TTL is a delayed fallback; the S3 three-day lifecycle bounds orphan retention during failures. A signed image URL lasts at most 60 seconds and is bounded by the room’s retention deadline. Source photos and private generation jobs are never shared with the room.
 
-## AWS handoff
+Financial records have no TTL. Neither room expiry nor job cleanup resets the image allowance.
 
-The frontend uses relative API and asset paths, and shared game rules have no Phaser dependency. AWS work can replace room conditional writes with a durable adapter, files with private S3 objects, and the image worker with an asynchronous queue. Static hosting, routing, scheduled cleanup, server adapter, deployment configuration, and cloud performance validation still need implementation. This phase deploys no AWS resources.
+## Verification
 
-Run `npm run test:multiplayer` for five real browser contexts and fault injection. Run `npm run test:load` for ten minutes of five concurrent HTTP agents; the measured report stays in ignored `artifacts/`. Both use fixture images and temporary storage, with no paid image requests.
+`test:multiplayer` covers five browser contexts, personal art, lost responses, independent catches, deadlines and fresh-game chains. `test:load` runs five HTTP players for ten minutes with SQLite. `test:aws` covers the real DynamoDB Local engine, concurrency, durable jobs, budget races and HTTP API v2 contracts. `test:load:aws` runs the same ten-minute game load through the DynamoDB adapter. All use fixtures, never paid image calls. See [AWS setup](AWS.md) and [security findings](SECURITY.md).

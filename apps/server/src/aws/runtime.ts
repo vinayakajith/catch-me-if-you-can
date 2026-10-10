@@ -18,7 +18,9 @@ export function runtime(worker = false) {
   const jobs = new CloudJobs({ db, assets, model, budgetMicros, enabled: process.env.FH_IMAGE_ENABLED === 'true' && budgetMicros > 0,
     provider: worker ? async () => {
       if (!saved || saved.until < Date.now()) {
-        const value = (await secrets!.send(new GetSecretValueCommand({ SecretId: required('FH_OPENAI_SECRET_ARN') }))).SecretString?.trim();
+        let value: string | undefined;
+        try { value = (await secrets!.send(new GetSecretValueCommand({ SecretId: required('FH_OPENAI_SECRET_ARN') }))).SecretString?.trim(); }
+        catch { throw new GenerationError('not_configured', 'Photo generation is temporarily unavailable. Completed faces are saved; sample artwork is ready to play.', { canRetry: true }); }
         if (!value?.startsWith('sk-')) throw new GenerationError('not_configured', 'Photo generation is not connected yet. Sample artwork is ready to play.', { canRetry: true });
         saved = { key: value, until: Date.now() + 60000 };
       }

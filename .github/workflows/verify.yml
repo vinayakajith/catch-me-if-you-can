@@ -1,0 +1,35 @@
+name: Verify Catch Me If You Can
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:aws
+      - run: npm run test:infra
+      - run: npm run infra:synth
+      - run: npm run test:lambda
+      - run: npm run test:aws
+      - run: npm run security:check
+      - run: npm audit --audit-level=high
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:characters
+      - run: npm run test:multiplayer
+      - run: npm run test:browser
+      # CI uses fixture providers, temporary local storage and Docker only.
+      # No AWS credentials, OpenAI secrets or deployment permissions are needed.

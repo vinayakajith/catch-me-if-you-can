@@ -6,7 +6,7 @@ Asset: `apps/web/public/assets/balaji-heads.png` (1536 Ã— 1024, transparent, 3 Ã
 
 Frames: serious, grin, laugh, giggle, bonked, dizzy. The serious portrait and Liberty disguise never animate their expressions. Other hiding poses use laugh/giggle.
 
-The reusable checked-lungi body rig is native SVG in `apps/web/src/art/dad.ts`. Intro and game share it; the face atlas remains replaceable for later photo generation. Poses: standing, running, scientist coat, broom rider, cramped, Liberty (flashlight/notebook), caught, feet under the bed.
+The reusable checked-lungi body rig is native SVG in `apps/web/src/art/dad.ts`. Intro and game share it; the face atlas is replaced by approved personal photo packs. Poses: standing, running, legacy scientist coat, broom rider, cramped, Liberty (flashlight/notebook), caught, feet under the bed.
 
 ## Exact generation prompt
 
