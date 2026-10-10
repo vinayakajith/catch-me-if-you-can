@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, Share2, Users } from 'lucide-react';
-import { ROUND_MS } from '@father-hunter/game-core';
+import { ROUND_MS } from '@catch-me-if-you-can/game-core';
 import { Brand, Dad, formatTime } from './components';
 import { RoomClient, roomConfig } from './room-api';
 import { NetworkHuntSession } from './network-session';

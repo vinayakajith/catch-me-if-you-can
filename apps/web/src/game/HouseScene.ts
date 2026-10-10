@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { HOUSE, broomPosition, roomAt, clearPath, canReach, contains, distance, findPath, isDadExposed, peekProgress, type ActionResult, type HidingSlot, type HuntSession, type Target, type Point } from '@father-hunter/game-core';
+import { HOUSE, broomPosition, roomAt, clearPath, canReach, contains, distance, findPath, isDadExposed, peekProgress, type ActionResult, type HidingSlot, type HuntSession, type Target, type Point } from '@catch-me-if-you-can/game-core';
 import { DAD_POSES, bodySvg } from '../art/dad';
 import { prepareCharacters } from './characters';
 import { hideoutSvg, sackSvg, svgUri } from './art';

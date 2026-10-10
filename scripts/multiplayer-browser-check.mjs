@@ -63,7 +63,7 @@ try {
     await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing');
     const remaining = await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - window.__huntTest.session.time());
     assert.ok(remaining > 117000 && remaining <= 120000, `Full two-minute window: ${remaining}`);
-    assert.equal(await page.title(), 'Father Hunter — The Suresh incident');
+    assert.equal(await page.title(), 'Catch Me If You Can — The Suresh incident');
     assert.match(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.atlas), /\/api\/rooms\/.*\/assets\/atlas.png$/, 'Every player loads the host’s personal character');
   }));
   console.log('PASS personal room creation survives lost reply; five browsers load the shared character; sixth rejected; timers start after intro');

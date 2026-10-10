@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, Check, Clock3, DoorOpen, Footprints, Home, MousePointer2, Search, Upload } from 'lucide-react';
-import { createFatherProfile, freshHuntSeed, type CharacterPack, type RoomView } from '@father-hunter/game-core';
+import { createFatherProfile, freshHuntSeed, type CharacterPack, type RoomView } from '@catch-me-if-you-can/game-core';
 import { Brand, Dad } from './components';
 import { unlockSound } from './sound';
 import { CharacterCreator } from './CharacterCreator';

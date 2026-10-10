@@ -161,7 +161,7 @@ async function finishHunt(page, mobile = false) {
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score), before.targets.length);
   assert.ok((await page.locator('.result-player').innerText()).includes(`${before.player.name} caught ${before.targets.length} ${before.father.name}s`));
   await page.screenshot({ path: new URL(mobile ? 'mobile-results.png' : 'desktop-results.png', artifacts).pathname });
-  await page.getByRole('button', { name: /Take another case/ }).click();
+  await page.getByRole('button', { name: /Replay/ }).click();
   await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
   await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready');
   const after = await page.evaluate(() => window.__huntTest.session.getSnapshot());
@@ -229,7 +229,7 @@ async function checkEdges(browser) {
   assert.match(await page.locator('.result-player').innerText(), /caught 1 Suresh in 2:00/);
   const card = await page.locator('.result-card').boundingBox();
   assert.ok(card.y >= 0 && card.y + card.height <= 568, 'Result card fits a short phone');
-  const again = await page.getByRole('button', {name:/Take another case/}).boundingBox();
+  const again = await page.getByRole('button', {name:/Replay/}).boundingBox();
   assert.ok(again.y >= 0 && again.y + again.height <= 568, 'Replay is immediately reachable');
   await page.screenshot({ path: new URL('small-phone-timeout.png', artifacts).pathname });
   await context.close();

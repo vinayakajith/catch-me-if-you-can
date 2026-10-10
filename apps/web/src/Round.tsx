@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, ArrowRight, Clock3, DoorOpen, Footprints, HelpCircle, Home, Lightbulb, Map, MousePointer2, Search, ShoppingBag, Sparkles, Trophy, Volume2, VolumeX, Waves, X } from 'lucide-react';
-import { HINT_MS, HOUSE, LocalHuntSession, type CharacterPack, type ActionResult, type Point, type HuntSession, type RoomView } from '@father-hunter/game-core';
+import { HINT_MS, HOUSE, LocalHuntSession, type CharacterPack, type ActionResult, type Point, type HuntSession, type RoomView } from '@catch-me-if-you-can/game-core';
 import { Brand, Dad, HouseMap, Joystick, formatTime } from './components';
 import { GameCanvas } from './game/GameCanvas';
 import { CaseIntro } from './CaseIntro';

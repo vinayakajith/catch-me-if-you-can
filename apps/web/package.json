@@ -1,5 +1,5 @@
 {
-  "name": "@father-hunter/web",
+  "name": "@catch-me-if-you-can/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "@father-hunter/game-core": "*",
+    "@catch-me-if-you-can/game-core": "*",
     "heic-to": "1.6.5",
     "lucide-react": "0.469.0",
     "phaser": "4.2.1",

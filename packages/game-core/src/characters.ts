@@ -13,4 +13,4 @@ export interface CharacterJobView {
   error: { code: string; message: string; canRetry: boolean; uncertain: boolean } | null;
   testMode: boolean;
 }
-export interface CharacterServiceConfig { available: boolean; testMode: boolean; maxUploadBytes: number; message?: string }
+export interface CharacterServiceConfig { available: boolean; testMode: boolean; maxUploadBytes: number; message?: string; uploadMode?: 's3' | 'multipart' }

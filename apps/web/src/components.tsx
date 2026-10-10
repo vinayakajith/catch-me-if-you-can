@@ -1,8 +1,8 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { BALAJI, HOUSE, type CharacterPack, type Expression, type HuntSnapshot, type Point, type RoomId } from '@father-hunter/game-core';
+import { BALAJI, HOUSE, type CharacterPack, type Expression, type HuntSnapshot, type Point, type RoomId } from '@catch-me-if-you-can/game-core';
 
 export function Brand({ onClick }: { onClick?: () => void }) {
-  return <button type="button" className="brand" onClick={onClick} aria-label="Father Hunter home"><img src="/favicon.svg" alt="" width="39" height="39" /><span>father<span className="brand-light">hunter</span><span className="brand-dot">.</span></span></button>;
+  return <button type="button" className="brand" onClick={onClick} aria-label="Catch Me If You Can home"><img src="/favicon.svg" alt="" width="39" height="39" /><span className="brand-name">catch me<span className="brand-light">if you can<span className="brand-dot">.</span></span></span></button>;
 }
 
 const expressionOrder: Expression[] = ['serious', 'grin', 'laugh', 'giggle', 'bonked', 'dizzy'];

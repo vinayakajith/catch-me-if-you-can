@@ -7,10 +7,17 @@ import { performance } from 'node:perf_hooks';
 import { buildApp } from '../apps/server/src/app.ts';
 import { FixtureProvider } from '../apps/server/test/fixtures.ts';
 import { HOUSE, LocalHuntSession, findPath, distance, canReach, isDadExposed } from '../packages/game-core/src/index.ts';
+import { fixture as cloudFixture } from '../apps/server/test/aws/fixture.ts';
+import { DynamoRoomStore } from '../apps/server/src/aws/room-store.ts';
+import { DynamoRateLimiter } from '../apps/server/src/aws/limits.ts';
 
 const seconds = Math.max(5, Number(process.env.FATHER_HUNTER_LOAD_SECONDS) || 600);
 const directory = await mkdtemp(join(tmpdir(), 'father-load-'));
-const provider = new FixtureProvider(), { app } = await buildApp({ directory, provider });
+const cloud = process.env.FH_LOAD_STORAGE === 'dynamo' ? await cloudFixture() : null;
+const storage = cloud ? 'dynamo' : 'sqlite';
+const provider = cloud?.provider ?? new FixtureProvider(), { app } = await buildApp({ directory, provider,
+  ...(cloud ? { jobs: cloud.jobs(), assets: cloud.assets, roomStore: new DynamoRoomStore(cloud.db), limiter: new DynamoRateLimiter(cloud.db), background: false } : {}),
+});
 const latencies = [], broadcasts = [], seenEvents = new Set(); let failures = 0, requests = 0, catchCount = 0, finishedAttempts = 0;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const percentile = (values, p) => [...values].sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * p))] ?? 0;
@@ -91,10 +98,10 @@ try {
   assert.ok(percentile(latencies, .95) < 250, 'Local API p95 under 250ms');
   assert.ok(percentile(broadcasts, .95) < 1000, 'Other players observe catches within one second at p95');
   if (seconds >= 600) assert.ok(bots.every(bot => bot.completed >= 4), 'At least four complete two-minute attempts per agent');
-  const report = { timestamp: new Date().toISOString(), durationSeconds: seconds, clients: 5, requests, failures, catches: catchCount, completedAttempts: finishedAttempts,
+  const report = { timestamp: new Date().toISOString(), storage, durationSeconds: seconds, clients: 5, requests, failures, catches: catchCount, completedAttempts: finishedAttempts,
     apiP95Ms: +percentile(latencies, .95).toFixed(2), apiP99Ms: +percentile(latencies, .99).toFixed(2), peerUpdateP95Ms: +percentile(broadcasts, .95).toFixed(2), observedEvents: seenEvents.size,
     agents: bots.map(bot => ({ name: bot.name, catches: bot.catches, completedAttempts: bot.completed })), standings: final.standings };
   await mkdir(new URL('../artifacts/', import.meta.url), { recursive: true });
-  await writeFile(new URL('../artifacts/multiplayer-load.json', import.meta.url), JSON.stringify(report, null, 2));
+  await writeFile(new URL(`../artifacts/multiplayer-load-${storage}.json`, import.meta.url), JSON.stringify(report, null, 2));
   console.log(`PASS ${JSON.stringify(report)}`);
-} finally { clearInterval(progress); await app.close(); await rm(directory, { recursive: true, force: true }); }
+} finally { clearInterval(progress); await app.close(); await cloud?.close(); await rm(directory, { recursive: true, force: true }); }

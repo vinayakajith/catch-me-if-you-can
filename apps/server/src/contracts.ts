@@ -1,4 +1,4 @@
-import type { CharacterJobStatus, CharacterJobView, Expression } from '../../../packages/game-core/src/index.ts';
+import type { CharacterJobStatus, CharacterJobView, CharacterServiceConfig, Expression } from '../../../packages/game-core/src/index.ts';
 
 export interface ImageUsage { textInput: number; imageInput: number; imageOutput: number; costUsd: number }
 export interface ImageResult { image: Buffer; usage: ImageUsage | null; requestId?: string }
@@ -28,6 +28,7 @@ export interface JobStore {
 }
 export interface AssetStore {
   read(jobId: string, name: string): Promise<Buffer>;
+  url?(jobId: string, name: string, expiresAt: number): Promise<string>;
   write(jobId: string, name: string, data: Buffer): Promise<void>;
   remove(jobId: string, name?: string): Promise<void>;
 }
@@ -37,4 +38,22 @@ export class GenerationError extends Error {
     super(message); this.name = 'GenerationError'; this.code = code;
     this.canRetry = options.canRetry ?? false; this.automatic = options.automatic ?? false; this.uncertain = options.uncertain ?? false; this.retryDelayMs = options.retryDelayMs;
   }
+}
+
+export type Awaitable<T> = T | Promise<T>;
+export type AssetResponse = Buffer | { url: string };
+export interface CharacterService {
+  initialize(): Promise<void>;
+  get(id: string, owner: string): Awaitable<CharacterJob>;
+  findUpload(owner: string, key: string): Awaitable<CharacterJob>;
+  view(job: CharacterJob): Awaitable<CharacterJobView>;
+  create(owner: string, key: string, name: string, upload: Buffer): Promise<CharacterJob>;
+  approve(id: string, owner: string, revision: number): Awaitable<CharacterJob>;
+  retry(id: string, owner: string, expression: Expression, revision: number): Awaitable<CharacterJob>;
+  finalize(id: string, owner: string, name: string, skin: string): Promise<CharacterJob>;
+  asset(id: string, owner: string, name: string): Promise<AssetResponse>;
+  characterBytes(id: string, owner: string): Promise<Buffer>;
+  config?(): Promise<CharacterServiceConfig>;
+  cleanup(): Promise<void>;
+  close(): Promise<void>;
 }

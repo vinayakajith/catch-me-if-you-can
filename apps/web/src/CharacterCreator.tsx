@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, LoaderCircle, RotateCcw, ShoppingBag, Sparkles } from 'lucide-react';
-import { DEFAULT_SKIN, EXPRESSIONS, type CharacterJobView, type CharacterPack, type CharacterServiceConfig, type Expression } from '@father-hunter/game-core';
+import { DEFAULT_SKIN, EXPRESSIONS, type CharacterJobView, type CharacterPack, type CharacterServiceConfig, type Expression } from '@catch-me-if-you-can/game-core';
 import { Brand, Dad } from './components';
 import { FatherArt } from './FatherArt';
 import { useCaseTitle } from './useCaseTitle';

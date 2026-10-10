@@ -1,4 +1,4 @@
-import type { PropKind } from '@father-hunter/game-core';
+import type { PropKind } from '@catch-me-if-you-can/game-core';
 
 const svg = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><g stroke="#484135" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">${body}</g></svg>`;
 const rect = (x: number, y: number, w: number, h: number, fill: string, r = 7) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}"/>`;

@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { chmodSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { GenerationError, type ImageProvider, type ImageResult } from './contracts.ts';
+import { GenerationError, type Awaitable, type ImageProvider, type ImageResult } from './contracts.ts';
 
 /** One persistent development allowance, independent of job expiry and restarts.
  * Reserve conservatively before calling OpenAI. Unknown charges keep the reserve.
@@ -12,7 +12,12 @@ import { GenerationError, type ImageProvider, type ImageResult } from './contrac
  * Token rates: https://developers.openai.com/api/docs/guides/image-generation#cost-and-latency
  * This is intentionally not a per-room or daily-reset allowance.
  */
-export class DevelopmentBudget {
+export interface SpendLedger {
+  readonly canAffordGeneration?: boolean;
+  reserve(): Awaitable<string>;
+  settle(id: string, costUsd: number): Awaitable<void>;
+}
+export class DevelopmentBudget implements SpendLedger {
   private db: DatabaseSync;
   readonly limitUsd: number;
   readonly reserveUsd = .2;
@@ -29,6 +34,7 @@ export class DevelopmentBudget {
     const reservedUsd = rows.filter(r => r.state !== 'settled').reduce((sum, r) => sum + Number(r.amount), 0);
     return { limitUsd: this.limitUsd, knownUsd, reservedUsd, remainingUsd: Math.max(0, this.limitUsd - knownUsd - reservedUsd), requests: rows.length };
   }
+  get canAffordGeneration() { return this.summary().remainingUsd + 1e-9 >= this.reserveUsd; }
   reserve() {
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -47,21 +53,21 @@ export class BudgetedImageProvider implements ImageProvider {
   readonly model: string; readonly testMode: boolean;
   get available() { return this.provider.available; }
   get serviceStatus() { return this.provider.serviceStatus; }
-  private provider: ImageProvider; private budget: DevelopmentBudget;
-  constructor(provider: ImageProvider, budget: DevelopmentBudget) {
+  private provider: ImageProvider; private budget: SpendLedger;
+  constructor(provider: ImageProvider, budget: SpendLedger) {
     this.provider = provider; this.budget = budget; this.model = provider.model; this.testMode = provider.testMode;
   }
-  get canAffordGeneration() { return this.budget.summary().remainingUsd + 1e-9 >= this.budget.reserveUsd; }
+  get canAffordGeneration() { return this.budget.canAffordGeneration ?? true; }
   async generate(input: Parameters<ImageProvider['generate']>[0]): Promise<ImageResult> {
-    const reservation = this.budget.reserve();
+    const reservation = await this.budget.reserve();
     try {
       const result = await this.provider.generate(input);
-      if (result.usage) this.budget.settle(reservation, result.usage.costUsd);
+      if (result.usage) await this.budget.settle(reservation, result.usage.costUsd);
       return result;
     } catch (error) {
       // Access and quota rejection do not start generation. Everything else stays
       // reserved, including timeouts, 5xx, missing usage and crashes.
-      if (error instanceof GenerationError && ['access', 'quota', 'not_configured', 'request_limits', 'service_paused'].includes(error.code)) this.budget.settle(reservation, 0);
+      if (error instanceof GenerationError && ['access', 'quota', 'not_configured', 'request_limits', 'service_paused'].includes(error.code)) await this.budget.settle(reservation, 0);
       throw error;
     }
   }

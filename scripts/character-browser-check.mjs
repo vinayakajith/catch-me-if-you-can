@@ -94,7 +94,7 @@ try {
     await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
     await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-personal-hunt.png`, artifacts).pathname });
     await page.evaluate(() => { const session = window.__huntTest.session; window.__characterClockOffset += session.getSnapshot().endsAt - Date.now() + 1; session.tick(); });
-    await page.getByRole('button', { name: /Take another case/ }).click();
+    await page.getByRole('button', { name: /Replay/ }).click();
     await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready');
     assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.id), id, 'Replay keeps personalized pack');
     assert.equal(provider.calls.length, before + 6);

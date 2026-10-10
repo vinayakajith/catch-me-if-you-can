@@ -1,4 +1,4 @@
-# Father Hunter
+# Catch Me If You Can
 
 A very unserious hidden-object game. A desi witch-scientist puts a broom engine in a time machine. Laughing copies escape. You are the government agent with sunglasses, one oversized wooden hammer, one sack, and two minutes.
 
@@ -110,6 +110,6 @@ See [the roadmap and playtest gates](docs/ROADMAP.md). The next step after the p
 
 ## Git workflow
 
-Repository: https://github.com/vinayakajith/father-hunter
+Repository: https://github.com/vinayakajith/catch-me-if-you-can
 
 Make small, coherent commits and push immediately after every commit. If the environment blocks GitHub, preserve local history and report the failed push. Do not claim a checkpoint is published until the push succeeds.

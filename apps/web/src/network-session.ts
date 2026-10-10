@@ -1,4 +1,4 @@
-import { LocalHuntSession, type ActionResult, type ControlledAttempt, type HuntCommand, type HuntSession, type HuntSnapshot, type Point } from '@father-hunter/game-core';
+import { LocalHuntSession, type ActionResult, type ControlledAttempt, type HuntCommand, type HuntSession, type HuntSnapshot, type Point } from '@catch-me-if-you-can/game-core';
 import { uploadKey } from './character-api';
 import { RoomApiError, RoomClient } from './room-api';
 

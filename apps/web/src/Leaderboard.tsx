@@ -1,5 +1,5 @@
 import { Trophy } from 'lucide-react';
-import type { RoomView } from '@father-hunter/game-core';
+import type { RoomView } from '@catch-me-if-you-can/game-core';
 
 export function Leaderboard({ view, final = false }: { view: RoomView; final?: boolean }) {
   const closed = view.room.status === 'closed', winners = view.standings.filter(p => p.rank === 1 && p.bestScore > 0);

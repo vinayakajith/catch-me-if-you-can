@@ -1,4 +1,4 @@
-import type { CharacterJobView, CharacterServiceConfig } from '@father-hunter/game-core';
+import type { CharacterJobView, CharacterServiceConfig } from '@catch-me-if-you-can/game-core';
 
 const jobKey = 'fh-character-job';
 const pendingKey = 'fh-character-upload';
@@ -27,7 +27,10 @@ export async function recoverCharacterUpload() {
   // never send a second paid creation request to recover a lost response.
   for (let attempt = 0; ; attempt++) {
     try {
-      const job = await request<CharacterJobView>(`/api/characters/uploads/${encodeURIComponent(key)}`);
+      let job = await request<CharacterJobView>(`/api/characters/uploads/${encodeURIComponent(key)}`);
+      // A completed S3 upload may have lost the final acknowledgement. This
+      // queues the existing job only; it never starts a second image job.
+      if (job.status === 'uploading') job = await completeUpload(job.id);
       if (pendingCharacterUpload() === key) rememberCharacterJob(job.id);
       return job;
     } catch (fault) {
@@ -37,14 +40,34 @@ export async function recoverCharacterUpload() {
   }
 }
 export async function createCharacterJob(photo: Blob, name: string, key: string) {
-  const body = new FormData(); body.append('name', name); body.append('photo', photo, 'portrait.jpg');
   try { localStorage.setItem(pendingKey, key); } catch { /* Same-tab retries still reuse this key. */ }
-  try { return await request<CharacterJobView>('/api/characters', { method: 'POST', headers: { 'idempotency-key': key }, body }); }
+  let cloud = false;
+  try {
+    cloud = (await characterConfig()).uploadMode === 's3';
+    if (cloud) {
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await photo.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('');
+      const result = await request<{ job: CharacterJobView; upload: { url: string; fields: Record<string, string> } | null }>('/api/characters/uploads', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify({ name, digest }),
+      });
+      if (!result.upload) return result.job;
+      const body = new FormData();
+      for (const [field, value] of Object.entries(result.upload.fields)) body.append(field, value);
+      body.append('file', photo, 'portrait.jpg');
+      let response: Response;
+      try { response = await fetch(result.upload.url, { method: 'POST', credentials: 'omit', body }); }
+      catch { throw new CharacterApiError(0, 'The photo upload lost its connection. Find the saved upload, or choose the photo again.'); }
+      if (!response.ok) throw new CharacterApiError(response.status, 'The photo did not finish uploading. Choose it again; no image has been generated.');
+      return completeUpload(result.job.id);
+    }
+    const body = new FormData(); body.append('name', name); body.append('photo', photo, 'portrait.jpg');
+    return await request<CharacterJobView>('/api/characters', { method: 'POST', headers: { 'idempotency-key': key }, body });
+  }
   catch (fault) {
-    if (fault instanceof CharacterApiError && fault.status >= 400 && fault.status < 500) { try { localStorage.removeItem(pendingKey); } catch { /* Unavailable storage. */ } }
+    if (!cloud && fault instanceof CharacterApiError && fault.status >= 400 && fault.status < 500) { try { localStorage.removeItem(pendingKey); } catch { /* Unavailable storage. */ } }
     throw fault;
   }
 }
+const completeUpload = (id: string) => request<CharacterJobView>(`/api/characters/uploads/${encodeURIComponent(id)}/complete`, { method: 'POST' });
 export const characterAction = (id: string, action: 'approve' | 'retry' | 'finalize', body: object) => request<CharacterJobView>(`/api/characters/${encodeURIComponent(id)}/${action}`, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
 });

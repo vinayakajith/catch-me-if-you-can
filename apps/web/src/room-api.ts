@@ -1,5 +1,5 @@
-import type { CommandResponse, ControlledAttempt, HuntCommand, RoomView } from '@father-hunter/game-core';
-import { uploadKey } from './character-api';
+import type { CommandResponse, ControlledAttempt, HuntCommand, RoomView } from '@catch-me-if-you-can/game-core';
+import { uploadKey } from './character-api.ts';
 
 export class RoomApiError extends Error {
   status: number;
@@ -33,7 +33,16 @@ export class RoomClient {
   accept(view: RoomView) {
     if (this.closed) return;
     const old = this.state.view;
-    if (old && (view.revision < old.revision || view.revision === old.revision && view.serverNow < old.serverNow)) return;
+    if (old) {
+      const shared = view.revision < old.revision || view.revision === old.revision && view.serverNow < old.serverNow ? old : view;
+      // Movement has its own per-player record in DynamoDB. A later poll can
+      // read an older acknowledgement while a command response is in flight.
+      const a = old.attempt, b = view.attempt;
+      const own = !a ? b : !b ? a : b.snapshot.startedAt > a.snapshot.startedAt ? b
+        : b.snapshot.startedAt < a.snapshot.startedAt ? a : b.ack > a.ack ? b : b.ack < a.ack ? a
+        : view.serverNow >= old.serverNow ? b : a;
+      view = { ...shared, attempt: shared.room.status === 'closed' ? null : own };
+    }
     this.state = { view, error: '' }; this.emit();
   }
   startPolling() { void this.poll(); document.addEventListener('visibilitychange', this.visible); }

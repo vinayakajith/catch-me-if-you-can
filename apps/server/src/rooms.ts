@@ -3,8 +3,8 @@ import { networkInterfaces } from 'node:os';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { BALAJI, EXPIRY_MS, HOUSE, LocalHuntSession, MAX_PLAYERS, RESULTS_MS, ROUND_MS, balancedTargets, createFatherProfile, placementMix, placeTargets, targetSignature,
   type ActionResult, type CharacterPack, type CommandResponse, type ControlledAttempt, type HuntCommand, type RoomView } from '../../../packages/game-core/src/index.ts';
-import type { AssetStore } from './contracts.ts';
-import { CharacterJobs, JobError } from './jobs.ts';
+import type { AssetStore, CharacterService } from './contracts.ts';
+import { JobError } from './jobs.ts';
 import type { RoomPlayer, RoomRecord, RoomStore } from './room-store.ts';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -23,8 +23,8 @@ function key(value: unknown) {
 const errorResult = (message: string): ActionResult => ({ ok: false, kind: 'error', message });
 
 export class Rooms {
-  private store: RoomStore; private assets: AssetStore; private jobs: CharacterJobs; private clock: () => number;
-  constructor(store: RoomStore, assets: AssetStore, jobs: CharacterJobs, clock: () => number = Date.now) {
+  private store: RoomStore; private assets: AssetStore; private jobs: CharacterService; private clock: () => number;
+  constructor(store: RoomStore, assets: AssetStore, jobs: CharacterService, clock: () => number = Date.now) {
     this.store = store; this.assets = assets; this.jobs = jobs; this.clock = clock;
   }
   private async get(id: string) {
@@ -65,9 +65,9 @@ export class Rooms {
       }
     } else if (data.characterId !== 'sample-balaji') {
       if (typeof data.characterId !== 'string') throw new JobError(400, `Choose ${fatherName}’s character for this room.`);
-      const job = this.jobs.get(data.characterId, owner), preview = this.jobs.view(job).preview;
+      const job = await this.jobs.get(data.characterId, owner), preview = (await this.jobs.view(job)).preview;
       if (job.status !== 'ready' || !preview) throw new JobError(409, `Finish making ${fatherName} before creating his room.`);
-      await this.assets.write(id, 'atlas.png', await this.jobs.asset(job.id, owner, 'atlas.png'));
+      await this.assets.write(id, 'atlas.png', await this.jobs.characterBytes(job.id, owner));
       father = createFatherProfile(fatherName, { ...preview, atlas: `/api/rooms/${id}/assets/atlas.png` });
     }
     const now = this.clock(); father.expiresAt = now + EXPIRY_MS;
@@ -154,7 +154,9 @@ export class Rooms {
             const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId) : null;
             const location = slot ? slot.kind === 'toilet' ? 'from the commode. The witch wants a refund.' : `from ${slot.kind === 'bed' ? 'under the bed' : `the ${slot.name}`}.` : 'off a flying broom. No licence.';
             room.events.push({ id: ++room.cursor, playerId: player.id, attemptId, text: `${player.name} bagged a ${room.father.name} ${location}`, at: now });
-            room.events = room.events.slice(-100); player.bestScore = Math.max(player.bestScore, snapshot.player.score);
+            // Keep room cleanup below DynamoDB's 100-item transaction ceiling,
+            // including five player/attempt records and room metadata.
+            room.events = room.events.slice(-80); player.bestScore = Math.max(player.bestScore, snapshot.player.score);
           }
         } else result = errorResult('Unknown game action.');
         attempt.ack = command.seq;
@@ -167,7 +169,7 @@ export class Rooms {
   async asset(id: string, owner: string, filename: string) {
     const room = await this.get(id); this.member(room, owner);
     if (filename !== 'atlas.png' || !room.father.atlas.startsWith('/api/rooms/')) throw new JobError(404, 'Image not found.');
-    return this.assets.read(id, filename);
+    return this.assets.url ? { url: await this.assets.url(id, filename, Math.min(this.clock() + 60000, room.resultsExpireAt)) } : this.assets.read(id, filename);
   }
   async cleanup() {
     for (const room of await this.store.list()) {
@@ -198,5 +200,5 @@ export function registerRooms(app: FastifyInstance, rooms: Rooms, canonicalOrigi
   app.post<{ Params: Params }>('/api/rooms/:id/attempts/:attemptId/commands', { bodyLimit: 32768 }, async request => {
     const data = body(request.body); return rooms.commands(request.params.id, identity(request), request.params.attemptId, key(data.controller), data.commands as HuntCommand[]);
   });
-  app.get<{ Params: Params }>('/api/rooms/:id/assets/:name', async (request, reply) => reply.type('image/png').send(await rooms.asset(request.params.id, identity(request), request.params.name)));
+  app.get<{ Params: Params }>('/api/rooms/:id/assets/:name', async (request, reply) => { const asset = await rooms.asset(request.params.id, identity(request), request.params.name); return 'url' in asset ? reply.redirect(asset.url) : reply.type('image/png').send(asset); });
 }

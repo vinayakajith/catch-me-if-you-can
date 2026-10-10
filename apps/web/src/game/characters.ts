@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import type { CharacterPack } from '@father-hunter/game-core';
+import type { CharacterPack } from '@catch-me-if-you-can/game-core';
 import { DAD_POSES, FACE_BOX } from '../art/dad';
 
 // Runtime composition, not altered source art: every reusable body takes its

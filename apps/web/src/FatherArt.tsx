@@ -1,4 +1,4 @@
-import type { CharacterPack, Expression } from '@father-hunter/game-core';
+import type { CharacterPack, Expression } from '@catch-me-if-you-can/game-core';
 import { bodyMarkup, FACE_BOX, type DadPose } from './art/dad';
 
 /** Identical head/body composition in the creator, introduction and Phaser rig. */

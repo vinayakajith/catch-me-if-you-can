@@ -27,13 +27,13 @@ export function registerSecurity(app: FastifyInstance, options: { publicOrigin?:
     reply.header('X-Frame-Options', 'DENY');
     if (configured) reply.header('Strict-Transport-Security', 'max-age=31536000');
     if (!['GET', 'HEAD'].includes(request.method)) {
-      if (request.headers['x-fh-request'] !== '1') throw new JobError(403, 'Please use Father Hunter to create your game.');
+      if (request.headers['x-fh-request'] !== '1') throw new JobError(403, 'Please use Catch Me If You Can to create your game.');
       const origin = request.headers.origin;
-      if (configured && origin !== configured) throw new JobError(403, 'Open this page from the Father Hunter address.');
+      if (configured && origin !== configured) throw new JobError(403, 'Open this page from the Catch Me If You Can address.');
       if (origin && !configured) {
         let valid = false;
         try { const parsed = new URL(origin); valid = parsed.origin === `${request.protocol}://${request.headers.host}`; } catch {}
-        if (!valid) throw new JobError(403, 'Open this page from the Father Hunter address.');
+        if (!valid) throw new JobError(403, 'Open this page from the Catch Me If You Can address.');
       }
     }
     const ip = createHash('sha256').update(request.ip).digest('hex');

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Pause, Play, RotateCcw, ShoppingBag, Volume2, VolumeX, Waves, X } from 'lucide-react';
-import type { CaseStory, CharacterPack, Expression } from '@father-hunter/game-core';
+import type { CaseStory, CharacterPack, Expression } from '@catch-me-if-you-can/game-core';
 import type { DadPose } from './art/dad';
 import { FatherArt } from './FatherArt';
 import { playSound, unlockSound } from './sound';

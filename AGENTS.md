@@ -1,4 +1,4 @@
-# Father Hunter working agreement
+# Catch Me If You Can working agreement
 
 - The local solo game, personal AI character flow, and five-player multiplayer rooms are implemented as described in README.md. Multiplayer was explicitly authorized: independent two-minute attempts, best scores across replays, one-hour rooms, and 24-hour final-score retention. Revenge chains and AWS deployment remain later phases.
 - Mobile and players with no gaming background are primary: preserve tap-to-walk, simple interactions, readable clues, and the contextual commode-lid reveal.

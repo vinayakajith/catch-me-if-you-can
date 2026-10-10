@@ -37,20 +37,8 @@ export class CharacterJobs {
     if (!job) throw new JobError(404, 'The upload has not reached the lab yet. Check again, or choose your photo again.');
     return this.get(job.id, owner);
   }
-  view(job: CharacterJob): CharacterJobView {
-    const remainingAttempts = Math.max(0, MAX_ATTEMPTS - job.attempts);
-    const idle = !['uploading', 'queued', 'generating', 'ready', 'expired'].includes(job.status);
-    const affordable = this.provider.available && this.provider.canAffordGeneration !== false;
-    const retryableExpressions = idle && affordable && remainingAttempts ? EXPRESSIONS.filter(expression => (job.stepAttempts[expression] ?? 0) < 2 && (job.baseApproved ? expression !== 'grin' && (Boolean(job.completed[expression]) || expression === job.currentExpression) : expression === 'grin')) : [];
-    const error = job.error && { ...job.error, canRetry: affordable && (['development_budget', 'quota', 'access', 'service_paused', 'not_configured'].includes(job.error.code) || job.error.canRetry) && remainingAttempts > 0 && (job.stepAttempts[job.currentExpression ?? 'grin'] ?? 0) < 2 };
-    return {
-      id: job.id, name: job.name, status: job.status, completed: EXPRESSIONS.filter(e => job.completed[e]), currentExpression: job.currentExpression,
-      baseRevision: job.baseRevision, baseApproved: job.baseApproved, attempts: job.attempts, remainingAttempts, retryableExpressions,
-      expiresAt: job.expiresAt, sourceUrl: job.sourcePresent ? `/api/characters/${job.id}/assets/source.jpg` : null,
-      preview: job.atlasRevision ? { id: job.id, name: job.name, version: 1, atlas: `/api/characters/${job.id}/assets/atlas.png?v=${job.atlasRevision}`, columns: 3, rows: 2, expressions: { ...EXPRESSION_FRAMES }, palette: { skin: job.skin }, expiresAt: job.expiresAt } : null,
-      error, testMode: job.testMode,
-    };
-  }
+  view(job: CharacterJob) { return characterJobView(job, this.provider.available && this.provider.canAffordGeneration !== false); }
+  async characterBytes(id: string, owner: string) { return this.asset(id, owner, 'atlas.png'); }
   async create(owner: string, idempotencyKey: string, name: string, upload: Buffer) {
     const fingerprint = createHash('sha256').update(upload).update(name).digest('hex');
     const existing = this.store.find(owner, idempotencyKey);
@@ -178,3 +166,17 @@ export class CharacterJobs {
   async idle() { await this.task; }
   async close() { this.stopping = true; await this.task; this.store.close(); }
 }
+
+export function characterJobView(job: CharacterJob, affordable: boolean): CharacterJobView {
+    const remainingAttempts = Math.max(0, MAX_ATTEMPTS - job.attempts);
+    const idle = !['uploading', 'queued', 'generating', 'ready', 'expired'].includes(job.status);
+    const retryableExpressions = idle && affordable && remainingAttempts ? EXPRESSIONS.filter(expression => (job.stepAttempts[expression] ?? 0) < 2 && (job.baseApproved ? expression !== 'grin' && (Boolean(job.completed[expression]) || expression === job.currentExpression) : expression === 'grin')) : [];
+    const error = job.error && { ...job.error, canRetry: affordable && (['development_budget', 'quota', 'access', 'service_paused', 'not_configured'].includes(job.error.code) || job.error.canRetry) && remainingAttempts > 0 && (job.stepAttempts[job.currentExpression ?? 'grin'] ?? 0) < 2 };
+    return {
+      id: job.id, name: job.name, status: job.status, completed: EXPRESSIONS.filter(e => job.completed[e]), currentExpression: job.currentExpression,
+      baseRevision: job.baseRevision, baseApproved: job.baseApproved, attempts: job.attempts, remainingAttempts, retryableExpressions,
+      expiresAt: job.expiresAt, sourceUrl: job.sourcePresent ? `/api/characters/${job.id}/assets/source.jpg` : null,
+      preview: job.atlasRevision ? { id: job.id, name: job.name, version: 1, atlas: `/api/characters/${job.id}/assets/atlas.png?v=${job.atlasRevision}`, columns: 3, rows: 2, expressions: { ...EXPRESSION_FRAMES }, palette: { skin: job.skin }, expiresAt: job.expiresAt } : null,
+      error, testMode: job.testMode,
+    };
+  }
