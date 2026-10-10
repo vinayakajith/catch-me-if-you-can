@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { BALAJI, HOUSE, canReach, contains, distance, findPath, type ActionResult, type HidingSlot, type HuntSession, type Point } from '@father-hunter/game-core';
-import { hunterSvg, propSvg, svgUri, toiletRimSvg } from './art';
+import { BALAJI, HOUSE, canReach, contains, distance, findPath, isDadExposed, peekProgress, type ActionResult, type HidingSlot, type HuntSession, type Point } from '@father-hunter/game-core';
+import { hideoutSvg, sackSvg, svgUri } from './art';
 
 export interface GameBridge {
   session: HuntSession;
@@ -9,6 +9,7 @@ export interface GameBridge {
   inputEnabled: boolean;
   feedback(result: ActionResult): void;
   ready(): void;
+  bagged?(count: number): void;
   failed(message: string): void;
   inspect?: () => void;
   navigate?: (point: Point) => void;
@@ -31,16 +32,23 @@ export class HouseScene extends Phaser.Scene {
   private stopped = false;
   private previousPosition: Point = HOUSE.spawn;
   private loaded = true;
+  private sack!: Phaser.GameObjects.Image;
+  private captureFX!: Phaser.GameObjects.Graphics;
+  private bagCount = 0;
+  private capturing?: { slotId: string; from: Point; startedAt: number; score: number };
+
 
   constructor(bridge: GameBridge) { super('House'); this.bridge = bridge; }
 
   preload() {
     this.load.image('balaji-source', BALAJI.atlas);
-    this.load.svg('hunter', svgUri(hunterSvg), { width: 160, height: 160 });
-    this.load.svg('toilet-rim', svgUri(toiletRimSvg), { width: 160, height: 160 });
-    for (const kind of new Set(HOUSE.slots.map(s => s.kind))) {
-      this.load.svg(kind, svgUri(propSvg(kind)), { width: 160, height: 160 });
-      this.load.svg(`${kind}-open`, svgUri(propSvg(kind, true)), { width: 160, height: 160 });
+    this.load.image('detective-source', '/assets/detective-poses.png');
+    this.load.svg('sack', svgUri(sackSvg), { width: 160, height: 160 });
+    for (const kind of new Set(HOUSE.props.map(s => s.kind))) {
+      for (const open of [false, true]) {
+        this.load.svg(`${kind}${open ? '-open' : ''}`, svgUri(hideoutSvg(kind, open)), { width: 160, height: 160 });
+        this.load.svg(`${kind}-front${open ? '-open' : ''}`, svgUri(hideoutSvg(kind, open, true)), { width: 160, height: 160 });
+      }
     }
     this.load.on('loaderror', () => { this.loaded = false; this.bridge.failed('The house art could not load. Please reload and try again.'); });
   }
@@ -49,26 +57,30 @@ export class HouseScene extends Phaser.Scene {
     if (!this.loaded) return;
     const source = this.textures.get('balaji-source').getSourceImage() as HTMLImageElement;
     this.textures.addSpriteSheet('balaji', source, { frameWidth: source.width / 3, frameHeight: source.height / 2 });
+    const detective = this.textures.get('detective-source').getSourceImage() as HTMLImageElement;
+    this.textures.addSpriteSheet('detective', detective, { frameWidth: detective.width / 3, frameHeight: detective.height / 2 });
     this.drawHouse();
-    for (const slot of HOUSE.slots) {
-      const { prop: p } = slot;
-      const prop = this.add.image(p.x + p.w / 2, p.y + p.h / 2, slot.kind).setDisplaySize(p.w, p.h).setDepth(p.y + p.h);
-      this.props.set(slot.id, prop);
-      if (slot.kind === 'toilet') this.rims.set(slot.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, 'toilet-rim').setDisplaySize(p.w, p.h).setDepth(1501).setVisible(false));
-      const dad = this.add.image(slot.target.x, slot.target.y, 'balaji', 1).setDisplaySize(64, 64).setDepth(p.y - 1).setVisible(false);
-      // Furniture covers the lower face. Preserve the hair outline so peeks
-      // blend into the scene; generous interaction bounds still suit touch.
-      dad.setCrop(0, 0, dad.width, dad.height * .7);
+    for (const item of HOUSE.props) {
+      const { prop: p } = item;
+      const slot = HOUSE.slots.find(s => s.id === item.id);
+      const open = slot?.mode === 'peek';
+      this.props.set(item.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, `${item.kind}${open ? '-open' : ''}`).setDisplaySize(p.w, p.h).setDepth(p.y + p.h));
+      if (!slot) continue;
+      this.rims.set(slot.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, `${slot.kind}-front${open ? '-open' : ''}`).setDisplaySize(p.w, p.h).setDepth(p.y + p.h + 2));
+      const dad = this.add.image(slot.target.x, slot.target.y, 'balaji', 1).setDisplaySize(slot.pose.width, slot.pose.height).setAngle(slot.pose.angle).setDepth(p.y + p.h + 1).setVisible(false);
+      dad.setCrop(0, 0, dad.width, dad.height * slot.pose.crop);
       this.dads.set(slot.id, dad);
     }
-    this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y - 25, 'hunter').setDisplaySize(57, 66).setDepth(2000);
+    this.sack = this.add.image(HOUSE.spawn.x + 25, HOUSE.spawn.y - 6, 'sack').setOrigin(.5, 1).setDisplaySize(30, 34).setDepth(1999);
+    this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y, 'detective', 0).setOrigin(.5, .94).setDisplaySize(94, 94).setDepth(2000);
+    this.captureFX = this.add.graphics().setDepth(2200);
     this.searchBar = this.add.graphics().setDepth(2200);
     this.destination = this.add.circle(0, 0, 9, 0xf7e8a6, .3).setStrokeStyle(2, 0xf6edc8, .9).setDepth(30).setVisible(false);
     for (const room of HOUSE.rooms.filter(r => r.id !== 'hall')) {
       this.fog.set(room.id, this.add.rectangle(room.x + room.w / 2, room.y + room.h / 2, room.w, room.h, 0x263e34, .34).setDepth(1800));
     }
     this.cameras.main.setBounds(0, 0, HOUSE.width, HOUSE.height);
-    this.cameras.main.startFollow(this.hunter, false, this.bridge.reducedMotion ? 1 : .12, this.bridge.reducedMotion ? 1 : .12, 0, 10);
+    this.cameras.main.startFollow(this.hunter, false, this.bridge.reducedMotion ? 1 : .12, this.bridge.reducedMotion ? 1 : .12, 0, 35);
     this.resize();
     this.scale.on('resize', this.resize, this);
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E') as Record<string, Phaser.Input.Keyboard.Key>;
@@ -83,6 +95,7 @@ export class HouseScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       unsubscribe(); this.scale.off('resize', this.resize, this);
       this.bridge.inspect = undefined; this.bridge.navigate = undefined;
+      if (import.meta.env.DEV) delete (window as unknown as { __huntTest?: unknown }).__huntTest;
     });
     this.sync(); this.bridge.ready();
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('test')) {
@@ -90,6 +103,7 @@ export class HouseScene extends Phaser.Scene {
       (window as unknown as { __huntTest: unknown }).__huntTest = { session: this.bridge.session, scene: this,
         tap: (p: Point) => this.tap(p), walk: (p: Point) => this.walkTo(p),
         face: (id: string) => { const dad = this.dads.get(id)!; return { x: dad.x, y: dad.y }; },
+        presentation: () => ({ busy: !!this.capturing, bagged: this.bagCount }),
         screen: (p: Point) => ({ x: (p.x - this.cameras.main.worldView.x) * this.cameras.main.zoom, y: (p.y - this.cameras.main.worldView.y) * this.cameras.main.zoom }),
         slots: HOUSE.slots,
       };
@@ -149,20 +163,21 @@ export class HouseScene extends Phaser.Scene {
     slippers.lineStyle(2, 0xcebd88).lineBetween(584, 558, 592, 565).lineBetween(603, 568, 611, 575);
   }
 
-  private dadPoint(slot: HidingSlot): Point {
-    return this.opened.has(slot.id) ? { x: slot.prop.x + slot.prop.w / 2, y: slot.prop.y + slot.prop.h * (slot.kind === 'toilet' ? .49 : .3) } : slot.target;
-  }
-
   private tap(point: Point) {
-    if (!this.bridge.inputEnabled) return;
+    if (!this.bridge.inputEnabled || this.capturing) return;
     const state = this.bridge.session.getSnapshot();
     if (state.status !== 'playing') return;
     for (const slot of HOUSE.slots.filter(s => s.roomId === state.player.roomId)) {
       const target = state.targets.find(t => t.slotId === slot.id && !t.claimedBy);
-      if (!target || (slot.mode === 'search' && !state.opened.includes(slot.id))) continue;
-      const p = this.dadPoint(slot);
-      const hit = state.opened.includes(slot.id) ? { x: p.x - 30, y: p.y - 35, w: 60, h: 65 } : slot.hit;
-      if (contains(hit, point, 10)) { this.walkTo(slot.anchor, { type: 'catch', slotId: slot.id }); return; }
+      if (!target || !isDadExposed(state, slot, Date.now())) continue;
+      const dad = this.dads.get(slot.id)!;
+      const hit = { x: dad.x - 30, y: dad.y - 31, w: 60, h: 62 };
+      if (contains(hit, point, 7)) {
+        const result = this.bridge.session.spot(slot.id);
+        if (result.ok) this.walkTo(slot.anchor, { type: 'catch', slotId: slot.id });
+        else this.bridge.feedback(result);
+        return;
+      }
     }
     const prop = HOUSE.slots.find(s => s.roomId === state.player.roomId && contains(s.prop, point, 5));
     if (prop) this.walkTo(prop.anchor, { type: 'search', slotId: prop.id });
@@ -171,7 +186,7 @@ export class HouseScene extends Phaser.Scene {
 
   private walkTo(point: Point, pending?: { type: 'search' | 'catch'; slotId: string }) {
     const state = this.bridge.session.getSnapshot();
-    if (state.status !== 'playing') return;
+    if (state.status !== 'playing' || this.capturing) return;
     this.pending = pending;
     if (pending && canReach(state.player.position, HOUSE.slots.find(s => s.id === pending.slotId)!)) { this.route = []; this.perform(); return; }
     this.route = findPath(state.player.position, point);
@@ -186,8 +201,9 @@ export class HouseScene extends Phaser.Scene {
   }
 
   private inspectNearest() {
+    if (!this.bridge.inputEnabled || this.capturing) return;
     const state = this.bridge.session.getSnapshot();
-    const near = HOUSE.slots.filter(s => canReach(state.player.position, s)).sort((a, b) => distance(a.anchor, state.player.position) - distance(b.anchor, state.player.position))[0];
+    const near = HOUSE.slots.filter(s => canReach(state.player.position, s) && !state.opened.includes(s.id)).sort((a, b) => distance(a.anchor, state.player.position) - distance(b.anchor, state.player.position))[0];
     if (near) this.bridge.feedback(this.bridge.session.search(near.id));
     else this.bridge.feedback({ ok: false, kind: 'error', message: 'Tap some furniture to walk over and check it.' });
   }
@@ -199,43 +215,99 @@ export class HouseScene extends Phaser.Scene {
     for (const [id, fog] of this.fog) fog.setVisible(id !== state.player.roomId);
     for (const slot of HOUSE.slots) {
       const target = state.targets.find(t => t.slotId === slot.id);
-      const dad = this.dads.get(slot.id)!;
       if (state.opened.includes(slot.id) && !this.opened.has(slot.id)) {
-        this.opened.add(slot.id); this.props.get(slot.id)!.setTexture(`${slot.kind}-open`);
-        this.rims.get(slot.id)?.setVisible(true);
-        if (target && !target.claimedBy) {
-          dad.setCrop(); const p = this.dadPoint(slot);
-          dad.setPosition(p.x, p.y).setDisplaySize(78, 78).setDepth(1500).setFrame(2).setVisible(true);
-          if (slot.kind === 'toilet') dad.setDisplaySize(64, 64).setCrop(0, 0, dad.width, dad.height * .72);
-          if (!this.bridge.reducedMotion) this.tweens.add({ targets: dad, y: { from: p.y + 20, to: p.y }, duration: 360, ease: 'Back.Out' });
+        this.opened.add(slot.id);
+        this.props.get(slot.id)!.setTexture(`${slot.kind}-open`);
+        this.rims.get(slot.id)!.setTexture(`${slot.kind}-front-open`);
+        // A quiet visual tick confirms an empty search, without stopping play for a joke.
+        if (!target) {
+          const tick = this.add.text(slot.target.x, slot.target.y, '✓', { fontSize: '24px', color: '#fff3c8', backgroundColor: '#647b60', padding: { x: 6, y: 2 } }).setOrigin(.5).setDepth(1600);
+          this.time.delayedCall(650, () => tick.destroy());
         }
       }
-      if (!target) { dad.setVisible(false); continue; }
-      if (target.claimedBy) {
-        if (!this.reacted.has(slot.id)) { this.reacted.add(slot.id); this.react(slot); }
-        continue;
-      }
-      const visible = state.player.roomId === slot.roomId && (slot.mode === 'peek' || this.opened.has(slot.id));
-      dad.setVisible(visible);
+      if (target?.claimedBy && !this.reacted.has(slot.id)) { this.reacted.add(slot.id); this.react(slot); }
+    }
+    this.animatePeeks(Date.now());
+  }
+
+  private animatePeeks(now: number) {
+    const state = this.bridge.session.getSnapshot();
+    for (const slot of HOUSE.slots) {
+      const dad = this.dads.get(slot.id)!;
+      const target = state.targets.find(t => t.slotId === slot.id);
+      if (target?.claimedBy) continue; // The capture owns its sprite until it is in the sack.
+      const revealed = state.opened.includes(slot.id) || state.spotted.includes(slot.id);
+      const progress = revealed ? 1 : slot.mode === 'peek' ? peekProgress(state.seed, slot, now - state.startedAt) : 0;
+      dad.setVisible(!!target && state.status === 'playing' && state.player.roomId === slot.roomId && progress > 0);
+      if (!dad.visible) continue;
+      dad.setFrame(revealed ? 2 : 1).setAlpha(this.bridge.reducedMotion ? progress : Math.min(1, progress * 3));
+      const upsideDown = slot.pose.angle === 180;
+      dad.setPosition(slot.target.x, slot.target.y + (this.bridge.reducedMotion ? 0 : (1 - progress) * (upsideDown ? -14 : 14)));
+      // Different silhouettes: a squash in a cushion, a long spring dad in a box.
+      const stretch = slot.kind === 'boxes' && !this.bridge.reducedMotion ? 1 + Math.sin(now / 270) * .035 : 1;
+      dad.setDisplaySize(slot.pose.width, slot.pose.height * stretch);
     }
   }
 
   private react(slot: HidingSlot) {
     const dad = this.dads.get(slot.id)!;
-    dad.setCrop().setFrame(3).setDisplaySize(86, 86).setDepth(2100).setVisible(true);
-    const label = this.add.text(dad.x, dad.y - 53, '+1 BALAJI', { fontFamily: 'Arial', fontSize: '15px', fontStyle: 'bold', color: '#fff1c5', backgroundColor: '#3d6555', padding: { x: 10, y: 6 } }).setOrigin(.5).setDepth(2300);
-    if (this.bridge.reducedMotion) this.time.delayedCall(800, () => { dad.setVisible(false); label.destroy(); });
+    this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 };
+    this.capturing = { slotId: slot.id, from: { x: dad.x, y: dad.y }, startedAt: Date.now(), score: this.bridge.session.getSnapshot().player.score };
+    dad.setCrop().setFrame(2).setAlpha(1).setDepth(2100).setVisible(true);
+    this.destination.setVisible(false);
+  }
+
+  private animateCapture(now: number) {
+    const capture = this.capturing;
+    if (!capture) return;
+    const dad = this.dads.get(capture.slotId)!;
+    const slot = HOUSE.slots.find(s => s.id === capture.slotId)!;
+    const p = Math.min(1, (now - capture.startedAt) / (this.bridge.reducedMotion ? 450 : 1050));
+    const hand = { x: this.hunter.x + (this.hunter.flipX ? -27 : 27), y: this.hunter.y - 53 };
+    this.hunter.setFrame(p < .4 ? 4 : 5).setOrigin(.5, .9);
+    this.captureFX.clear();
+    if (this.bridge.reducedMotion) dad.setAlpha(1 - p).setAngle(slot.pose.angle);
     else {
-      this.tweens.add({ targets: dad, y: dad.y - 34, angle: 9, duration: 240, yoyo: true, ease: 'Back.Out' });
-      this.time.delayedCall(380, () => dad.setFrame(slot.kind === 'toilet' ? 2 : 4));
-      this.tweens.add({ targets: [dad, label], alpha: 0, delay: 900, duration: 400, onComplete: () => { dad.setVisible(false); label.destroy(); } });
+      const grab = Math.min(1, p / .42), plop = Math.max(0, (p - .42) / .58);
+      const ease = 1 - Math.pow(1 - grab, 3);
+      dad.setPosition(Phaser.Math.Linear(capture.from.x, hand.x, ease), Phaser.Math.Linear(capture.from.y, hand.y, ease));
+      dad.setAngle(slot.pose.angle * (1 - ease) + plop * 24).setFrame(p < .38 ? 2 : 4);
+      dad.setDisplaySize((slot.pose.width + 8 * Math.sin(grab * Math.PI)) * (1 - plop * .88), (slot.pose.height + 23 * Math.sin(grab * Math.PI)) * (1 - plop * .88));
+      if (plop > 0) dad.setPosition(Phaser.Math.Linear(hand.x, this.sack.x, plop), Phaser.Math.Linear(hand.y, this.sack.y - this.sack.displayHeight * .75, plop) - Math.sin(plop * Math.PI) * 26);
+      if (p > .4 && p < .82) {
+        this.captureFX.fillStyle(0x9dd5d3, .9);
+        this.captureFX.fillEllipse(dad.x - 15, dad.y + Math.sin(p * 15) * 8, 5, 9).fillEllipse(dad.x + 15, dad.y + Math.cos(p * 15) * 8, 5, 9);
+      }
+      if (p > .83) this.captureFX.lineStyle(3, 0xf3d589, (1 - p) * 5).strokeCircle(this.sack.x, this.sack.y - 25, 16 + (p - .83) * 100);
+    }
+    if (p >= 1) {
+      dad.setVisible(false); this.captureFX.clear(); this.bagCount = capture.score;
+      this.capturing = undefined; this.hunter.setFrame(0).setOrigin(.5, .94);
+      this.bridge.bagged?.(this.bagCount);
     }
   }
 
-  update(_time: number, delta: number) {
+  update(time: number, delta: number) {
     if (!this.hunter || !this.loaded) return;
     this.bridge.session.tick();
-    if (!this.bridge.inputEnabled) { this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 }; this.destination.setVisible(false); return; }
+    const now = Date.now();
+    this.animatePeeks(now);
+    this.animateCapture(now); // Also settle a last capture after a tab was in the background.
+    const stateBefore = this.bridge.session.getSnapshot();
+    const bagSize = 30 + this.bagCount * 4;
+    const wiggle = !this.bridge.reducedMotion && this.bagCount > 0 ? Math.sin(time / 160) * Math.max(0, Math.sin(time / 900)) : 0;
+    this.sack.setDisplaySize(bagSize + wiggle * 2, bagSize * 1.08 - wiggle * 2).setPosition(this.hunter.x + (this.hunter.flipX ? -28 : 28), this.hunter.y - 4).setAngle(wiggle * 5);
+    this.searchBar.clear();
+    if (stateBefore.search) {
+      this.hunter.setFrame(3).setOrigin(.5, .9);
+      const slot = HOUSE.slots.find(s => s.id === stateBefore.search!.slotId)!;
+      const progress = Math.min(1, (now - stateBefore.search.startedAt) / (stateBefore.search.endsAt - stateBefore.search.startedAt));
+      this.searchBar.fillStyle(0x303e33, .9).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 30, slot.prop.y - 14, 60, 8, 4);
+      this.searchBar.fillStyle(0xf4c86e).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 28, slot.prop.y - 12, 56 * progress, 4, 2);
+    }
+    if (!this.bridge.inputEnabled || this.capturing) {
+      this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 }; this.destination.setVisible(false); return;
+    }
     const k = this.keys;
     const keyDirection = { x: Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.LEFT.isDown), y: Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.UP.isDown) };
     let direction = this.bridge.movement.x || this.bridge.movement.y ? this.bridge.movement : keyDirection;
@@ -249,24 +321,15 @@ export class HouseScene extends Phaser.Scene {
         delta = Math.min(delta, d / 210 * 1000);
       } else this.perform();
     }
+    if (this.capturing) return;
     this.bridge.session.move(direction, delta);
     if (Phaser.Input.Keyboard.JustDown(k.E)) this.inspectNearest();
-    const state = this.bridge.session.getSnapshot();
-    const pos = state.player.position;
+    const state = this.bridge.session.getSnapshot(), pos = state.player.position;
     const moving = distance(pos, this.previousPosition) > .1;
     this.previousPosition = pos;
-    this.hunter.setPosition(pos.x, pos.y - 25 + (moving && !this.bridge.reducedMotion ? Math.sin(_time / 85) * 2 : 0));
+    this.hunter.setPosition(pos.x, pos.y + (moving && !this.bridge.reducedMotion ? Math.sin(time / 85) * 1.5 : 0));
+    this.hunter.setFrame(state.search ? 3 : moving && !this.bridge.reducedMotion ? 1 + Math.floor(time / 160) % 2 : 0).setOrigin(.5, state.search ? .9 : .94);
     if (direction.x) this.hunter.setFlipX(direction.x < 0);
-    for (const slot of HOUSE.slots.filter(s => ['plant', 'curtain', 'shower'].includes(s.kind))) {
-      this.props.get(slot.id)!.setRotation(this.bridge.reducedMotion ? 0 : Math.sin(_time / 1300 + slot.target.x) * .009);
-    }
     this.destination.setVisible(this.route.length > 0 && !this.stopped);
-    this.searchBar.clear();
-    if (state.search) {
-      const slot = HOUSE.slots.find(s => s.id === state.search!.slotId)!;
-      const progress = Math.min(1, (Date.now() - state.search.startedAt) / (state.search.endsAt - state.search.startedAt));
-      this.searchBar.fillStyle(0x303e33, .9).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 35, slot.prop.y - 53, 70, 9, 4);
-      this.searchBar.fillStyle(0xf4c86e).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 33, slot.prop.y - 51, 66 * progress, 5, 2);
-    }
   }
 }

@@ -48,3 +48,84 @@ export const toiletRimSvg = svg('<path d="M28 80A52 47 0 0 0 132 80L115 82A35 32
 
 // Phaser's SVG loader decodes data URLs as base64, including in its Canvas fallback.
 export const svgUri = (source: string) => `data:image/svg+xml;base64,${btoa(String.fromCharCode(...new TextEncoder().encode(source)))}`;
+
+// Hideouts have a back and a transparent foreground. Balaji sits between them.
+// Keep all layers in the same 160px coordinate system so the rim really overlaps him.
+export function hideoutSvg(kind: PropKind, open: boolean, foreground = false): string {
+  let back = '', front = '';
+  const dark = '#605a47', cream = '#f0dfb8';
+  switch (kind) {
+    case 'vase':
+      back = `<path d="M52 49h56l-8 25q49 48 15 70H45Q12 124 60 74z" fill="#cc8e60"/>` + ellipse(80, 51, 29, 12, dark);
+      front = `<path d="M33 98q47 16 94 0q13 32-12 46H45q-25-14-12-46" fill="#dda572"/><path d="M40 118q39 19 79 0" fill="none" stroke="#f2d2a0" stroke-width="9"/>`;
+      back += `<path d="M64 47L42 16m44 31l10-31m-14 30l44-22" stroke="#698d66" stroke-width="5"/>` + ellipse(41, 16, 16, 11, '#e7b557') + ellipse(96, 17, 15, 14, '#bf6857') + ellipse(127, 23, 13, 11, '#dfad74');
+      if (!open) back += ellipse(80, 60, 29, 19, '#77956b') + ellipse(73, 47, 16, 13, '#d4a550');
+      break;
+    case 'cushion':
+      back = rect(4, 15, 152, 136, '#b47057', 20) + rect(21, 32, 120, 108, '#e0b978', 25) + (open ? rect(30, 53, 102, 64, dark, 19) : line(37, 83, 124, 83));
+      front = `<path d="M23 95q53 12 115 0v16q0 30-28 29H49q-28 1-26-45" fill="#e6c38b"/>` + `<path d="M30 94l9 7 9-7 9 7 9-7 9 7 9-7 9 7 9-7 9 7 9-7" fill="none" stroke="#99774b"/>` + rect(127, 78, 8, 25, '#f1ddad', 2); break;
+    case 'curtain':
+      back = rect(17, 14, 125, 10, '#ac8554', 3) + rect(24, 24, 112, 61, '#7b9c86', 5);
+      front = rect(23, 26, 114, 52, '#89aa93', 23) + `<path d="M48 34v34m32-34v34m31-34v34" stroke="#4f796d"/>` + ellipse(27, 51, 14, 26, '#bdd0b2'); break;
+    case 'portrait':
+      back = rect(18, 9, 126, 139, '#a0774d', 4) + rect(30, 22, 101, 113, '#b1bfa0', 2) + `<path d="M32 102l27-31 28 27 18-18 23 25v26H32z" fill="#819174" stroke="none"/>`;
+      front = `<path d="M18 9h126v139H18zM31 23v110h99V23z" fill="#c19b62" fill-rule="evenodd"/>` + `<path d="M24 15h113v126H24z" fill="none" stroke="#edd49c"/>`; break;
+    case 'jar':
+      back = rect(29, 27, 104, 119, '#c9d0a0', 22) + (open ? rect(37, 35, 88, 99, '#a9b67e', 15) : rect(23, 15, 116, 26, '#bb6550', 6));
+      if (open) back += rect(10, 7, 50, 14, '#bb6550', 4);
+      front = `<path d="M31 41v83q0 22 24 22h53q23 0 23-22V41" fill="none" stroke="#758964" stroke-width="6"/><path d="M40 51v59" stroke="#f2edce" stroke-width="7" opacity=".65"/>` + rect(49, 120, 66, 21, '#e4cc91', 3) + `<path d="M60 130h44" stroke="#b17645"/>`; break;
+    case 'cooker':
+      back = rect(24, 55, 114, 81, '#92aaa1', 23) + ellipse(81, 57, 57, 21, dark) + line(24, 76, 4, 72) + line(138, 76, 155, 72);
+      front = `<path d="M24 86q57 25 114 0v23q0 28-31 28H56q-32 0-32-28z" fill="#a6bbb0"/><path d="M43 111q36 15 75 0" fill="none" stroke="#d0d7bf" stroke-width="6"/>`;
+      back += `<g transform="translate(0 ${open ? -32 : 0})">${ellipse(81, 51, 60, 19, '#c2cec0')}${rect(68, 20, 25, 20, '#535e50', 5)}${line(117, 35, 121, 21)}</g>`; break;
+    case 'toaster':
+      back = rect(13, 52, 134, 85, '#d1a26e', 18) + ellipse(80, 57, 53, 15, '#8b7050') + rect(34, 47, 92, 17, dark, 7);
+      front = `<path d="M13 83q65 15 134 0v40q0 14-14 14H27q-14 0-14-14z" fill="#e9bf83"/>` + ellipse(127, 109, 7, 7, '#aa6950') + line(146, 66, 146, 108) + rect(140, 63, 16, 9, '#65786b', 3); break;
+    case 'fruit':
+      back = ellipse(80, 91, 71, 24, '#876e4e') + ellipse(38, 73, 24, 26, '#d7ad53') + ellipse(115, 67, 22, 25, '#a4ad62');
+      front = `<path d="M10 91q70 22 140 0q-13 54-70 56Q24 142 10 91" fill="#c7815c"/><path d="M28 116q50 21 104 0" stroke="#eebc86" stroke-width="7" fill="none"/>` + ellipse(44, 88, 23, 20, '#bc6950') + `<path d="M95 86q25 0 39-21q2 31-36 38" fill="#eac65e"/>`; break;
+    case 'pillow':
+      back = rect(9, 13, 142, 135, '#b08a87', 11) + `<path d="M24 33q52-16 114 3l-5 83q-60 20-110-5z" fill="#eee2be"/>`;
+      if (open) back += ellipse(83, 71, 54, 33, dark);
+      front = `<path d="M23 92q64 12 112-1l-2 28q-65 25-111-5z" fill="#f4e8cb"/><path d="M30 104l96 6" stroke="#cbb793" stroke-dasharray="4 5"/>`; break;
+    case 'drawer':
+      back = rect(22, 17, 116, 128, '#b38a5d', 5) + rect(30, 25, 100, 47, '#d4b17c', 3) + ellipse(80, 49, 5, 5, '#725d42') + rect(30, 80, 100, 52, open ? dark : '#c49b68', 3);
+      front = `<path d="M22 ${open ? 106 : 80}h116v40H22z" fill="#d2ae77"/>` + ellipse(80, open ? 126 : 100, 6, 5, '#74583d'); break;
+    case 'slipper':
+      back = `<path d="M42 27Q89 0 120 40l6 69q-11 47-55 40Q31 145 32 113z" fill="#cc9f70"/>` + ellipse(82, 57, 36, 31, dark);
+      front = `<path d="M34 79q45-26 88 0l4 30q-13 46-55 40Q30 145 32 113z" fill="#af6d57"/><path d="M44 101q38-17 70 1" stroke="#e1b28a" fill="none" stroke-width="9"/>`; break;
+    case 'laundry':
+      back = `<path d="M19 121q-12-35 26-45q-9-49 35-43q24-21 46 15q37 14 13 65z" fill="#90a995"/>`;
+      front = `<path d="M8 122q7-40 36-25q6-35 34-6q30-19 38 10q32-15 37 30l-15 17H23z" fill="#cc9a8e"/><path d="M47 116l11 25m39-26l-8 30" fill="none" stroke="#eed5b7" stroke-width="7"/>`; break;
+    case 'toilet':
+      back = propSvg('toilet', open); front = toiletRimSvg; return foreground ? (open ? front : svg('')) : back;
+    case 'washer':
+      back = rect(19, 11, 122, 139, '#d2d8bf', 11) + rect(26, 18, 108, 27, '#ece6cc', 4) + ellipse(116, 31, 8, 8, '#788c7b') + ellipse(81, 98, 45, 43, '#7f9e93') + ellipse(81, 98, 33, 33, dark);
+      front = `<path d="M36 98a45 43 0 1 0 90 0a45 43 0 1 0-90 0m11 0a34 32 0 1 1 68 0a34 32 0 1 1-68 0" fill="#ecdfbd" fill-rule="evenodd"/>`;
+      if (!open) back += ellipse(81, 98, 33, 33, '#91b0a6') + line(60, 80, 99, 109, '#c9d9c6');
+      else back += `<path d="M28 60q-40 33 0 72" fill="none" stroke="#afbea5" stroke-width="10"/>`; break;
+    case 'bucket':
+      back = `<path d="M30 45h102l-14 99H43z" fill="#779c98"/>` + ellipse(81, 45, 52, 17, '#b4c9be') + ellipse(81, 45, 42, 11, dark);
+      front = `<path d="M32 73q48 18 97 0l-11 71H43z" fill="#88aca4"/><path d="M30 47q-17 53 51 55q66-3 52-55" fill="none" stroke="#ddc68e" stroke-width="5"/>`; break;
+    case 'toiletries':
+      back = rect(11, 12, 138, 18, '#9e7e54', 3) + rect(26, 35, 23, 38, '#a0b9a1', 4) + rect(25, 28, 25, 10, '#697b68', 3) + rect(93, 41, 34, 31, '#d49a75', 5) + rect(99, 28, 21, 13, '#dfbf92', 3);
+      front = rect(10, 70, 140, 15, '#c5a171', 3) + line(22, 85, 32, 98) + line(138, 85, 128, 99); break;
+    case 'suitcase':
+      back = rect(10, 30, 140, 117, '#ac7056', 15) + `<path d="M62 28V14h37v14" fill="none" stroke-width="7"/>` + rect(23, 43, 114, 94, open ? dark : '#c0926c', 9);
+      front = `<path d="M12 106h136v28q0 13-15 13H26q-14 0-14-13z" fill="#c4936f"/>` + rect(32, 107, 14, 34, '#e0c193', 2) + rect(116, 107, 14, 34, '#e0c193', 2);
+      if (!open) back += rect(63, 69, 37, 30, '#e5d0a2', 3); break;
+    case 'boxes':
+      back = rect(23, 59, 117, 88, '#bd955e', 3) + (open ? `<path d="M23 58L7 32l64 8 15 16 57-21 12 27" fill="#dec08a"/>` + ellipse(80, 65, 50, 14, dark) : rect(19, 43, 124, 26, '#e1c38b', 3));
+      front = `<path d="M23 97h117v50H23z" fill="#d4b17a"/>` + rect(68, 98, 21, 48, '#ead2a1', 0); break;
+    case 'umbrella':
+      back = `<path d="M36 11l11 71m24-70l2 75m36-71l-5 69m24-68l-21 78" stroke="#8e7655" stroke-width="7"/>` + rect(21, 75, 120, 73, '#7c9988', 17) + ellipse(81, 76, 60, 15, dark);
+      front = `<path d="M21 98q59 17 120 0v31q0 19-24 19H45q-24 0-24-19z" fill="#94ad94"/><path d="M43 107v29m37-23v26m37-31v28" stroke="#c4cfa8" stroke-width="6"/>`; break;
+    case 'carpet':
+      back = `<path d="M21 34h96q42 4 37 48q-5 39-39 42H21z" fill="#ad7471"/>` + `<path d="M33 37v86m25-85v85m25-85v85" stroke="#d6b18a" stroke-width="11"/>` + ellipse(120, 80, 33, 43, dark);
+      front = `<path d="M89 81a31 43 0 1 0 62 0a31 43 0 1 0-62 0m9 0a22 32 0 1 1 44 0a22 32 0 1 1-44 0" fill="#cfa18b" fill-rule="evenodd"/>`; break;
+    default: return foreground ? svg('') : propSvg(kind, open);
+  }
+  return svg(foreground ? front : `<ellipse cx="80" cy="146" rx="66" ry="8" fill="#332e26" opacity=".13" stroke="none"/>${back}`);
+}
+
+export const sackSvg = svg(`<path d="M53 38L43 13l35 11 40-13-15 29q-2 13 14 35q35 58-6 72H46Q9 132 41 76q18-23 12-38" fill="#c9a76b"/><path d="M47 47q32 8 62-1" stroke="#745b39" stroke-width="8"/><path d="M61 64q-20 34-15 53m65-16l-10 30" fill="none" stroke="#e3c48c" stroke-width="7"/><path d="M50 104l60-8 4 31-59 8z" fill="#ead5a6"/><path d="M70 116q5-10 12-3q8-10 13-2q-6 12-14 4q-7 10-11 1" fill="#68553b" stroke="none"/>`);
