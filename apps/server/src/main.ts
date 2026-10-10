@@ -1,11 +1,14 @@
 import { resolve } from 'node:path';
 import { buildApp } from './app.ts';
 import { OpenAIImageProvider } from './provider.ts';
+import { BudgetedImageProvider, DevelopmentBudget } from './budget.ts';
 
-const provider = new OpenAIImageProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.FATHER_HUNTER_IMAGE_MODEL,
+const rawProvider = new OpenAIImageProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.FATHER_HUNTER_IMAGE_MODEL,
   quality: process.env.FATHER_HUNTER_IMAGE_QUALITY === 'medium' ? 'medium' : 'high' });
+const budget = new DevelopmentBudget(resolve('.father-hunter'));
+const provider = new BudgetedImageProvider(rawProvider, budget);
 const { app } = await buildApp({ directory: resolve(process.env.FATHER_HUNTER_DATA_DIR || '.father-hunter'), provider,
   dailyJobs: Math.max(1, Number(process.env.FATHER_HUNTER_DAILY_JOBS) || 20) });
 await app.listen({ host: '127.0.0.1', port: Number(process.env.FATHER_HUNTER_API_PORT) || 8787 });
 console.log(`Father Hunter photo service ready (${provider.available ? 'OpenAI connected' : 'add OPENAI_API_KEY to .env to enable photo generation'}).`);
-for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { app.close().then(() => process.exit(0)); });
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { app.close().then(() => { budget.close(); process.exit(0); }); });

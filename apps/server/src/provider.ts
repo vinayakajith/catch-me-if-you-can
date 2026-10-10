@@ -11,6 +11,7 @@ export class OpenAIImageProvider implements ImageProvider {
   private quality: 'high' | 'medium';
   constructor(options: { apiKey?: string; model?: string; quality?: 'high' | 'medium' } = {}) {
     this.model = options.model || 'gpt-image-2.5-sunburst-2026-09-08';
+    if (!/^gpt-image-2\.5-(sunburst|flare)(-2026-09-08)?$/.test(this.model)) throw new Error('Development cost accounting supports GPT Image 2.5 Sunburst and Flare only.');
     this.quality = options.quality || 'high';
     this.available = Boolean(options.apiKey);
     this.client = options.apiKey ? new OpenAI({ apiKey: options.apiKey, maxRetries: 0, timeout: 180_000 }) : null;
