@@ -49,7 +49,7 @@ export class HouseScene extends Phaser.Scene {
   preload() {
     this.load.image('father-source', this.bridge.session.getSnapshot().father.atlas);
     this.load.image('detective-source', '/assets/detective-poses.png');
-    for (const pose of DAD_POSES) this.load.svg(`body-${pose}`, svgUri(bodySvg(pose)), { width: 160, height: 220 });
+    for (const pose of DAD_POSES) this.load.svg(`body-${pose}`, svgUri(bodySvg(pose, this.bridge.session.getSnapshot().father.palette?.skin)), { width: 160, height: 220 });
     this.load.svg('sack', svgUri(sackSvg), { width: 160, height: 160 });
     for (const kind of new Set(HOUSE.props.map(s => s.kind))) {
       for (const open of [false, true]) {

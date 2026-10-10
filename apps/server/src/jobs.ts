@@ -15,8 +15,14 @@ export class CharacterJobs {
     this.clock = options.clock ?? Date.now; this.dailyJobs = options.dailyJobs ?? 20; this.retryDelayMs = options.retryDelayMs ?? 2000;
   }
   async initialize() {
-    for (const job of this.store.list()) if (job.status === 'generating') {
-      job.status = 'interrupted'; job.error = { code: 'interrupted', message: 'Generation was interrupted. This attempt may have been charged. Your completed faces are saved; retry this step when ready.', canRetry: true, uncertain: true }; this.store.save(job);
+    for (const job of this.store.list()) {
+      if (job.status === 'generating') {
+        job.status = 'interrupted'; job.error = { code: 'interrupted', message: 'Generation was interrupted. This attempt may have been charged. Your completed faces are saved; retry this step when ready.', canRetry: true, uncertain: true }; this.store.save(job);
+      } else if (job.status === 'uploading' || (job.status === 'interrupted' && !job.error && job.attempts === 0)) {
+        try { await this.assets.read(job.id, 'source.jpg'); job.status = 'queued'; }
+        catch { job.status = 'failed'; job.sourcePresent = false; job.error = { code: 'upload_incomplete', message: 'The upload was interrupted before the photo was saved. Choose it again; no image was generated.', canRetry: false, uncertain: false }; }
+        this.store.save(job);
+      }
     }
     await this.cleanup(); this.kick();
   }
@@ -26,9 +32,14 @@ export class CharacterJobs {
     if (job.expiresAt <= this.clock()) throw new JobError(410, 'This Dad has expired. Create a fresh one or play with sample Balaji.');
     return job;
   }
+  findUpload(owner: string, key: string) {
+    const job = this.store.find(owner, key);
+    if (!job) throw new JobError(404, 'The upload has not reached the lab yet. Check again, or choose your photo again.');
+    return this.get(job.id, owner);
+  }
   view(job: CharacterJob): CharacterJobView {
     const remainingAttempts = Math.max(0, MAX_ATTEMPTS - job.attempts);
-    const idle = !['queued', 'generating', 'ready', 'expired'].includes(job.status);
+    const idle = !['uploading', 'queued', 'generating', 'ready', 'expired'].includes(job.status);
     const retryableExpressions = idle && remainingAttempts ? EXPRESSIONS.filter(expression => (job.stepAttempts[expression] ?? 0) < 2 && (job.baseApproved ? expression !== 'grin' && (Boolean(job.completed[expression]) || expression === job.currentExpression) : expression === 'grin')) : [];
     const error = job.error && { ...job.error, canRetry: job.error.canRetry && remainingAttempts > 0 && (job.stepAttempts[job.currentExpression ?? 'grin'] ?? 0) < 2 };
     return {
@@ -60,9 +71,9 @@ export class CharacterJobs {
       baseRevision: 0, baseApproved: false, sourcePresent: true, completed: {}, currentExpression: 'grin', stepAttempts: {}, attempts: 0,
       skin: DEFAULT_SKIN, atlasRevision: 0, error: null, usage: [], unmeteredRequests: 0, requestIds: [], model: this.provider.model, testMode: this.provider.testMode };
     // Reserve the idempotency key before yielding to disk I/O.
-    job.status = 'interrupted'; this.store.save(job);
+    job.status = 'uploading'; this.store.save(job);
     try { await this.assets.write(job.id, 'source.jpg', photo); job.status = 'queued'; this.store.save(job); }
-    catch { job.status = 'failed'; job.error = { code: 'storage', message: 'The photo could not be saved. Choose it again.', canRetry: false, uncertain: false }; this.store.save(job); }
+    catch { job.status = 'failed'; job.sourcePresent = false; job.error = { code: 'storage', message: 'The photo could not be saved. Choose it again.', canRetry: false, uncertain: false }; this.store.save(job); }
     this.kick(); return job;
   }
   approve(id: string, owner: string, revision: number) {
@@ -75,7 +86,7 @@ export class CharacterJobs {
   retry(id: string, owner: string, expression: Expression, revision: number) {
     const job = this.get(id, owner);
     if (revision !== job.baseRevision) throw new JobError(409, 'The preview changed. Check Dad’s latest face.');
-    if (['queued', 'generating'].includes(job.status)) return job;
+    if (['uploading', 'queued', 'generating'].includes(job.status)) return job;
     if (job.error && !job.error.canRetry) throw new JobError(409, job.error.message);
     if (!this.view(job).retryableExpressions.includes(expression)) throw new JobError(409, 'This Dad has used his retry allowance. Use the existing preview or choose a new photo.');
     job.status = 'queued'; job.error = null; job.currentExpression = expression; this.store.save(job); this.kick(); return job;

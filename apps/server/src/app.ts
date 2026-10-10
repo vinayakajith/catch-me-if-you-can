@@ -42,6 +42,7 @@ export async function buildApp(options: { directory: string; provider: ImageProv
   });
   app.get('/api/characters/config', async () => ({ available: options.provider.available, testMode: options.provider.testMode, maxUploadBytes: MAX_UPLOAD_BYTES,
     message: options.provider.available ? undefined : 'Photo generation is not connected yet. Sample Balaji is ready to play.' }));
+  app.get<{ Params: { key: string } }>('/api/characters/uploads/:key', async request => jobs.view(jobs.findUpload(owner(request.cookies['fh-owner']), request.params.key)));
   app.post('/api/characters', async (request, reply) => {
     const key = request.headers['idempotency-key'];
     if (typeof key !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw new JobError(400, 'Choose your photo again to start a fresh upload.');

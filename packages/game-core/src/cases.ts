@@ -2,7 +2,7 @@ import { BALAJI } from './house.ts';
 import type { CaseStory, CharacterPack } from './types.ts';
 
 export function createFatherProfile(name: string, art: CharacterPack = BALAJI): CharacterPack {
-  return { ...art, name: name.trim().replace(/\s+/g, ' ').slice(0, 32) || BALAJI.name, expressions: { ...art.expressions } };
+  return { ...art, name: name.trim().replace(/\s+/g, ' ').slice(0, 32) || BALAJI.name, expressions: { ...art.expressions }, ...(art.palette ? { palette: { ...art.palette } } : {}) };
 }
 
 export function createTimeMachineCase(father: string, detective: string): CaseStory {

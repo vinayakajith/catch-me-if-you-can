@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p apps/server/tsconfig.json",
     "test": "node --test packages/game-core/test/*.test.ts apps/server/test/*.test.ts",
     "test:browser": "node scripts/browser-check.mjs",
+    "test:characters": "node scripts/character-browser-check.mjs",
     "preview": "npm run preview --workspace @father-hunter/web"
   },
   "devDependencies": {

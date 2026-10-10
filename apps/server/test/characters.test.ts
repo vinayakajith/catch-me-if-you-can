@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
+import { createHash, randomUUID } from 'node:crypto';
 import { CHARACTER_RETENTION_MS, EXPRESSIONS } from '../../../packages/game-core/src/index.ts';
 import { CharacterJobs } from '../src/jobs.ts';
 import { DiskAssetStore, SqliteJobStore } from '../src/storage.ts';
@@ -52,6 +53,8 @@ test('concurrent double uploads use one job, one generation and reject changed p
   assert.equal(a.id, b.id); await jobs.idle(); assert.equal(provider.calls.length, 1);
   await assert.rejects(jobs.create('owner', 'creation-key-1234', 'Different', photo), /upload has changed/);
   assert.throws(() => jobs.get(a.id, 'other'), /not be found/);
+  assert.equal(jobs.findUpload('owner', 'creation-key-1234').id, a.id);
+  assert.throws(() => jobs.findUpload('other', 'creation-key-1234'), /not reached/);
 });
 
 test('transient failures retry only their step; quota and uncertain outcomes never auto-retry', async t => {
@@ -79,6 +82,21 @@ test('a stored in-flight request becomes interrupted after restart without anoth
   assert.equal(jobs.view(jobs.get(job.id, 'owner')).error?.uncertain, true);
 });
 
+test('restart recovers a saved upload and rejects an incomplete upload without generating twice', async t => {
+  const { jobs, store, assets, provider } = await setup(t);
+  const initial = await jobs.create('owner', 'upload-template-1234', 'Dad', await portrait()); await jobs.idle();
+  const template = jobs.get(initial.id, 'owner');
+  const staged = { ...template, id: randomUUID(), idempotencyKey: 'saved-upload-1234', status: 'uploading' as const, completed: {}, attempts: 0, stepAttempts: {}, currentExpression: 'grin' as const, baseRevision: 0, atlasRevision: 0 };
+  const missing = { ...staged, id: randomUUID(), idempotencyKey: 'missing-upload-1234' };
+  await assets.write(staged.id, 'source.jpg', await portrait()); store.save(staged); store.save(missing);
+  await jobs.initialize(); await jobs.idle();
+  assert.equal(jobs.findUpload('owner', staged.idempotencyKey).status, 'awaiting_approval');
+  assert.equal(jobs.get(missing.id, 'owner').error?.code, 'upload_incomplete');
+  assert.equal(jobs.view(jobs.get(missing.id, 'owner')).sourceUrl, null);
+  assert.equal(provider.calls.length, 2, 'Only the saved upload generates a new head');
+  await jobs.initialize(); await jobs.idle(); assert.equal(provider.calls.length, 2);
+});
+
 test('expiry immediately denies reads and removes original and generated assets', async t => {
   const { jobs, assets, advance } = await setup(t);
   const initial = await jobs.create('owner', 'expiry-key-12345', 'Dad', await portrait()); await jobs.idle();
@@ -103,11 +121,19 @@ test('all six fixture heads normalize; opaque, clipped and invalid uploads are r
 
 test('HTTP creation requires same-origin action header and assets belong to their cookie owner', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'father-hunter-http-'));
-  const { app } = await buildApp({ directory, provider: new FixtureProvider(), retryDelayMs: 1 });
+  const { app, jobs } = await buildApp({ directory, provider: new FixtureProvider(), retryDelayMs: 1 });
   t.after(async () => { await app.close(); await rm(directory, { recursive: true, force: true }); });
   const config = await app.inject('/api/characters/config');
   assert.equal(config.statusCode, 200); assert.match(String(config.headers['set-cookie']), /HttpOnly/);
   const rejected = await app.inject({ method: 'POST', url: '/api/characters', payload: {} }); assert.equal(rejected.statusCode, 403);
   const foreign = await app.inject({ method: 'POST', url: '/api/characters', headers: { 'x-fh-request': '1', origin: 'https://elsewhere.example' }, payload: {} }); assert.equal(foreign.statusCode, 403);
   const unavailable = await app.inject('/api/characters/not-a-job/assets/source.jpg'); assert.equal(unavailable.statusCode, 404);
+  const cookie = String(config.headers['set-cookie']).split(';')[0];
+  const owner = createHash('sha256').update(cookie.split('=')[1]).digest('hex');
+  const job = await jobs.create(owner, 'lost-upload-response', 'Dad', await portrait()); await jobs.idle();
+  const lookup = await app.inject({ url: '/api/characters/uploads/lost-upload-response', headers: { cookie } });
+  assert.equal(lookup.statusCode, 200); assert.equal(lookup.json().id, job.id);
+  const stranger = await app.inject('/api/characters/uploads/lost-upload-response'); assert.equal(stranger.statusCode, 404);
+  assert.equal((await app.inject({ url: `/api/characters/${job.id}/assets/atlas.png`, headers: { cookie } })).statusCode, 200);
+  assert.equal((await app.inject(`/api/characters/${job.id}/assets/atlas.png`)).statusCode, 404);
 });

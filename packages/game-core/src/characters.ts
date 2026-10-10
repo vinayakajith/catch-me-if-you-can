@@ -4,7 +4,7 @@ export const EXPRESSIONS: readonly Expression[] = ['serious', 'grin', 'laugh', '
 export const EXPRESSION_FRAMES: Record<Expression, number> = { serious: 0, grin: 1, laugh: 2, giggle: 3, bonked: 4, dizzy: 5 };
 export const DEFAULT_SKIN = '#da995c';
 export const CHARACTER_RETENTION_MS = 24 * 60 * 60 * 1000;
-export type CharacterJobStatus = 'queued' | 'generating' | 'awaiting_approval' | 'preview' | 'ready' | 'failed' | 'interrupted' | 'expired';
+export type CharacterJobStatus = 'uploading' | 'queued' | 'generating' | 'awaiting_approval' | 'preview' | 'ready' | 'failed' | 'interrupted' | 'expired';
 export interface CharacterJobView {
   id: string; name: string; status: CharacterJobStatus; completed: Expression[];
   currentExpression: Expression | null; baseRevision: number; baseApproved: boolean;

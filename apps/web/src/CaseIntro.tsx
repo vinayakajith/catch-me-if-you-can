@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Pause, Play, RotateCcw, ShoppingBag, Volume2, VolumeX, Waves, X } from 'lucide-react';
 import type { CaseStory, CharacterPack, Expression } from '@father-hunter/game-core';
-import { bodyMarkup, FACE_BOX, type DadPose } from './art/dad';
+import type { DadPose } from './art/dad';
+import { FatherArt } from './FatherArt';
 import { playSound, unlockSound } from './sound';
 import './case-intro.css';
 
@@ -14,12 +15,8 @@ const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const mix = (a: number, b: number, t: number) => a + (b - a) * clamp(t);
 
 function Figure({ father, x, y, scale = 1, pose = 'run', mood = 'laugh', angle = 0, opacity = 1 }: { father: CharacterPack; x: number; y: number; scale?: number; pose?: DadPose; mood?: Expression; angle?: number; opacity?: number }) {
-  const frame = father.expressions[mood];
   return <g transform={`translate(${x} ${y}) rotate(${angle}) scale(${scale})`} opacity={opacity} className="intro-dad" data-pose={pose}>
-    <g dangerouslySetInnerHTML={{ __html: bodyMarkup(pose) }} />
-    <svg x={FACE_BOX.x} y={FACE_BOX.y} width={FACE_BOX.w} height={FACE_BOX.h} viewBox={`${frame % father.columns * 100} ${Math.floor(frame / father.columns) * 100} 100 100`} overflow="hidden">
-      <image href={father.atlas} width={father.columns * 100} height={father.rows * 100} />
-    </svg>
+    <FatherArt father={father} pose={pose} mood={mood} />
   </g>;
 }
 
