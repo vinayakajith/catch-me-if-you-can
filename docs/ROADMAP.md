@@ -2,7 +2,7 @@
 
 ## Phase 1 — Solo fun prototype
 
-The current implementation milestone. Prove mobile navigation, visual discovery, furniture searches, and character comedy with a bundled fictional father.
+Implemented locally. Prove mobile navigation, visual discovery, furniture searches, and character comedy with a bundled fictional father through the remaining human playtests.
 
 Human acceptance:
 
@@ -25,11 +25,13 @@ Gate: five real browser clients compete correctly, including races for the same 
 
 ## Phase 3 — Personal fathers and revenge
 
-Build on the editable father name and shared intro/game CharacterPack. Add photo upload, asynchronous image-generation jobs, progress, retryable failures, and creator preview. Generate a recognizable consistent CharacterPack with serious, grinning, laughing, giggling, bonked and dizzy expressions; animate expression assets in the game engine. The intro reuses the generated face on animated scientist, runner, and broom-rider bodies; its laboratory background stays separate. See [the personalization contract](INTRO-ART.md). Uploads and generated assets sit behind a storage interface backed by local files during development.
+Personal generation was brought forward at the user’s request, ahead of multiplayer. Implemented locally: phone crop and HEIC conversion, durable jobs, one-face approval before five anchored expression edits, recoverable uploads, bounded retries, six-face and gameplay previews, body palette, private asset delivery, source deletion, 24-hour expiry, and personalized intro/hunt/replay. The intro reuses faces on animated scientist, runner, and broom-rider bodies; its laboratory background stays separate. See [the personalization contract](INTRO-ART.md). Storage and provider interfaces keep the renderer independent of SQLite, files, and OpenAI.
+
+The development key has a persistent **$1 total** budget, enforced before each image request with conservative reservations for uncertain outcomes. The pinned image model is `gpt-image-2.5-sunburst-2026-09-08`. Automated tests use a fixture provider and do not spend money. The broader ten-photo likeness trial remains deferred under this budget; a fictional Balaji reference only verifies the integration and visual consistency, not real-person likeness.
 
 Revenge creates a new independent hunt through the same creation flow. It never overwrites the completed room.
 
-Gate: several different photos produce recognizable faces at gameplay size; the upload-to-play and revenge flows work on phones. Agree the image provider, generation budget, and retention period when implementing this phase.
+Remaining gate: several different real photos produce recognizable faces at gameplay size; actual phones handle upload-to-play; revenge works once shared rooms exist. Increase the trial budget only with explicit user authorization. Generation failure must leave the sample game playable.
 
 ## Phase 4 — AWS deployment
 

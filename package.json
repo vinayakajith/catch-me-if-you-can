@@ -20,6 +20,7 @@
     "test": "node --test packages/game-core/test/*.test.ts apps/server/test/*.test.ts",
     "test:browser": "node scripts/browser-check.mjs",
     "test:characters": "node scripts/character-browser-check.mjs",
+    "generation:cost": "node scripts/generation-cost.mjs",
     "preview": "npm run preview --workspace @father-hunter/web"
   },
   "devDependencies": {
