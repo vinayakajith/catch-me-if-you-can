@@ -63,7 +63,7 @@ export class GameStack extends Stack {
     new events.Rule(this, 'CleanupSchedule', { schedule: events.Schedule.rate(Duration.minutes(1)), targets: [new targets.LambdaFunction(cleanup, { retryAttempts: 2 })] });
     const http = new gateway.HttpApi(this, 'Http', { apiName: 'Catch Me If You Can', createDefaultStage: false, defaultIntegration: new integrations.HttpLambdaIntegration('Proxy', api) });
     const accessLogs = new logs.LogGroup(this, 'HttpLogs', { retention: logs.RetentionDays.ONE_WEEK, removalPolicy: RemovalPolicy.DESTROY });
-    new gateway.HttpStage(this, 'HttpStage', { httpApi: http, stageName: '$default', autoDeploy: true, throttle: { rateLimit: 100, burstLimit: 200 }, accessLogSettings: { destination: new gateway.LogGroupLogDestination(accessLogs), format: restGateway.AccessLogFormat.custom(JSON.stringify({ requestId: '$context.requestId', status: '$context.status', route: '$context.routeKey', latency: '$context.responseLatency' })) } });
+    const stage = new gateway.HttpStage(this, 'HttpStage', { httpApi: http, stageName: '$default', autoDeploy: true, throttle: { rateLimit: 100, burstLimit: 200 }, accessLogSettings: { destination: new gateway.LogGroupLogDestination(accessLogs), format: restGateway.AccessLogFormat.custom(JSON.stringify({ requestId: '$context.requestId', status: '$context.status', route: '$context.routeKey', latency: '$context.responseLatency' })) } });
     const requestPolicy = new cloudfront.OriginRequestPolicy(this, 'GameRequests', { cookieBehavior: cloudfront.OriginRequestCookieBehavior.allowList('fh-owner'), queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(), headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList('Origin', 'Content-Type', 'Idempotency-Key', 'X-FH-Request', 'CloudFront-Viewer-Address') });
     const security = new cloudfront.ResponseHeadersPolicy(this, 'BrowserSecurity', { securityHeadersBehavior: {
       contentTypeOptions: { override: true }, frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true }, referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true }, strictTransportSecurity: { accessControlMaxAge: Duration.days(365), override: true },
@@ -80,10 +80,16 @@ export class GameStack extends Stack {
     const files = new deployment.BucketDeployment(this, 'PublishFiles', { sources: [deployment.Source.asset(webRoot)], destinationBucket: web, prune: false, cacheControl: [deployment.CacheControl.maxAge(Duration.minutes(5))], memoryLimit: 512 });
     const html = new deployment.BucketDeployment(this, 'PublishHtml', { sources: [deployment.Source.data('index.html', readFileSync(`${webRoot}/index.html`, 'utf8'))], destinationBucket: web, prune: false, cacheControl: [deployment.CacheControl.noStore()], distribution, distributionPaths: ['/index.html'], memoryLimit: 256 });
     html.node.addDependency(files);
+    // A handled HTTP 500 or SQS partial failure is a successful Lambda invocation.
+    // Observe the HTTP result and redacted worker events as well as Lambda errors.
+    const imageFailures = new logs.MetricFilter(this, 'ImageFailureMetric', { logGroup: worker.logGroup, metricNamespace: 'CatchMeIfYouCan', metricName: `${this.stackName}-ImageFailures`, metricValue: '1', filterPattern: logs.FilterPattern.any(logs.FilterPattern.stringValue('$.event', '=', 'image_job_failed'), logs.FilterPattern.stringValue('$.event', '=', 'image_worker_retry')) });
+    const httpThrottles = new logs.MetricFilter(this, 'HttpThrottleMetric', { logGroup: accessLogs, metricNamespace: 'CatchMeIfYouCan', metricName: `${this.stackName}-HttpThrottles`, metricValue: '1', filterPattern: logs.FilterPattern.stringValue('$.status', '=', '429') });
     const alarms = [
-      new watch.Alarm(this, 'ApiErrors', { metric: api.metricErrors({ period: Duration.minutes(1) }), threshold: 5, evaluationPeriods: 2 }),
+      new watch.Alarm(this, 'ApiErrors', { metric: stage.metricServerError({ period: Duration.minutes(1) }), threshold: 5, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'ApiThrottles', { metric: api.metricThrottles({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
-      new watch.Alarm(this, 'ImageFailures', { metric: worker.metricErrors({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 1 }),
+      new watch.Alarm(this, 'HttpThrottles', { metric: httpThrottles.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
+      new watch.Alarm(this, 'ImageFailures', { metric: imageFailures.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 1 }),
+      new watch.Alarm(this, 'ImageCrashes', { metric: worker.metricErrors({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 1 }),
       new watch.Alarm(this, 'ImageBacklog', { metric: queue.metricApproximateAgeOfOldestMessage({ period: Duration.minutes(1) }), threshold: 600, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'DeadLetters', { metric: dead.metricApproximateNumberOfMessagesVisible(), threshold: 1, evaluationPeriods: 1 }),
       new watch.Alarm(this, 'CleanupErrors', { metric: cleanup.metricErrors({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),

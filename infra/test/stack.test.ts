@@ -26,6 +26,8 @@ test('serverless infrastructure starts with private storage, isolated secrets an
     template.hasResourceProperties('AWS::Lambda::Function', { Handler: 'workers.imageHandler', Timeout: 300, ReservedConcurrentExecutions: 2, Runtime: 'nodejs24.x', Architectures: ['x86_64'] });
     template.hasResourceProperties('AWS::Lambda::EventSourceMapping', { BatchSize: 1, FunctionResponseTypes: ['ReportBatchItemFailures'], ScalingConfig: { MaximumConcurrency: 2 } });
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', { DefaultRouteSettings: { ThrottlingBurstLimit: 200, ThrottlingRateLimit: 100 } });
+    template.resourceCountIs('AWS::Logs::MetricFilter', 2);
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', { Namespace: 'AWS/ApiGateway', MetricName: '5xx' });
     const functions = template.findResources('AWS::Lambda::Function') as Record<string, any>;
     const api = Object.values(functions).find(r => r.Properties.Handler === 'api.handler');
     assert.equal(api.Properties.Environment.Variables.FH_OPENAI_SECRET_ARN, undefined);

@@ -117,6 +117,7 @@ export class CloudJobs implements CharacterService {
       if (['development_budget', 'service_paused', 'access', 'quota', 'not_configured'].includes(fault.code)) { job.attempts--; job.stepAttempts[expression] = Math.max(0, (job.stepAttempts[expression] ?? 1) - 1); }
       if (['access', 'quota', 'not_configured'].includes(fault.code)) await this.db.put({ pk: 'IMAGE_HEALTH', sk: 'META', retryAt: this.clock() + 300000, message: fault.message });
       job.error = { code: fault.code, message: fault.message, canRetry: fault.canRetry, uncertain: fault.uncertain };
+      console.warn(JSON.stringify({ event: 'image_job_failed', code: fault.code, uncertain: fault.uncertain }));
       const automatic = fault.automatic && !fault.uncertain && (fault.retryDelayMs ?? 0) <= 30000 && job.attempts < 8 && (job.stepAttempts[expression] ?? 0) < 2;
       job.status = automatic ? 'queued' : fault.uncertain ? 'interrupted' : 'failed'; job.notBefore = this.clock() + Math.max(2000, fault.retryDelayMs ?? 0); await this.save(job);
     }
