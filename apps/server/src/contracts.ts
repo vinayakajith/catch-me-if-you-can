@@ -7,6 +7,7 @@ export interface ImageProvider {
   readonly testMode: boolean;
   readonly model: string;
   readonly canAffordGeneration?: boolean;
+  readonly serviceStatus?: { message: string; retryAt: number };
   generate(input: { photo: Buffer; base?: Buffer; expression: Expression; correction?: string }): Promise<ImageResult>;
 }
 export interface CharacterJob {
@@ -31,9 +32,9 @@ export interface AssetStore {
   remove(jobId: string, name?: string): Promise<void>;
 }
 export class GenerationError extends Error {
-  code: string; canRetry: boolean; automatic: boolean; uncertain: boolean;
-  constructor(code: string, message: string, options: { canRetry?: boolean; automatic?: boolean; uncertain?: boolean } = {}) {
+  code: string; canRetry: boolean; automatic: boolean; uncertain: boolean; retryDelayMs?: number;
+  constructor(code: string, message: string, options: { canRetry?: boolean; automatic?: boolean; uncertain?: boolean; retryDelayMs?: number } = {}) {
     super(message); this.name = 'GenerationError'; this.code = code;
-    this.canRetry = options.canRetry ?? false; this.automatic = options.automatic ?? false; this.uncertain = options.uncertain ?? false;
+    this.canRetry = options.canRetry ?? false; this.automatic = options.automatic ?? false; this.uncertain = options.uncertain ?? false; this.retryDelayMs = options.retryDelayMs;
   }
 }

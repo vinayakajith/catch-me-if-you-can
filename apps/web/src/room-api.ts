@@ -3,7 +3,8 @@ import { uploadKey } from './character-api';
 
 export class RoomApiError extends Error {
   status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  retryAfterMs: number;
+  constructor(status: number, message: string, retryAfterMs = 0) { super(message); this.status = status; this.retryAfterMs = retryAfterMs; }
 }
 export async function roomRequest<T>(url: string, data?: object, key?: string): Promise<T> {
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 4000);
@@ -11,7 +12,7 @@ export async function roomRequest<T>(url: string, data?: object, key?: string): 
     const response = await fetch(url, { credentials: 'same-origin', signal: controller.signal, method: data ? 'POST' : 'GET',
       headers: { 'x-fh-request': '1', ...(data ? { 'content-type': 'application/json' } : {}), ...(key ? { 'idempotency-key': key } : {}) }, body: data ? JSON.stringify(data) : undefined });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new RoomApiError(response.status, result.message || 'The room could not update. Try again.');
+    if (!response.ok) throw new RoomApiError(response.status, result.message || 'The room could not update. Try again.', Math.max(0, Number(response.headers.get('retry-after')) || 0) * 1000);
     return result as T;
   } catch (error) { if (error instanceof RoomApiError) throw error; throw new RoomApiError(0, 'Reconnecting… your timer is still running.'); }
   finally { clearTimeout(timeout); }
@@ -38,12 +39,13 @@ export class RoomClient {
   startPolling() { void this.poll(); document.addEventListener('visibilitychange', this.visible); }
   private visible = () => { if (!document.hidden) { clearTimeout(this.timer); void this.poll(); } };
   private polling = false;
+  private pollDelay = 500;
   private async poll() {
     if (this.closed || this.polling) return;
     this.polling = true;
-    try { this.accept(await roomRequest<RoomView>(`/api/rooms/${this.id}/state?after=${this.state.view?.cursor ?? 0}`)); }
-    catch (error) { this.state = { ...this.state, error: (error as Error).message }; this.emit(); }
-    finally { this.polling = false; if (!this.closed) this.timer = setTimeout(() => { if (document.hidden) { this.timer = setTimeout(() => void this.poll(), 3000); } else void this.poll(); }, 500); }
+    try { this.accept(await roomRequest<RoomView>(`/api/rooms/${this.id}/state?after=${this.state.view?.cursor ?? 0}`)); this.pollDelay = 500; }
+    catch (error) { this.pollDelay = Math.min(60000, Math.max(1000, (error as RoomApiError).retryAfterMs || this.pollDelay * 2)); this.state = { ...this.state, error: (error as Error).message }; this.emit(); }
+    finally { this.polling = false; if (!this.closed) this.timer = setTimeout(() => { if (document.hidden) { this.timer = setTimeout(() => void this.poll(), 3000); } else void this.poll(); }, this.pollDelay); }
   }
   async join(name: string) { const view = await roomRequest<RoomView>(`/api/rooms/${this.id}/join`, { name }); this.accept(view); }
   async begin(key: string, controller: string) { const result = await roomRequest<ControlledAttempt>(`/api/rooms/${this.id}/attempts`, { controller }, key); this.accept(result.view); return result; }

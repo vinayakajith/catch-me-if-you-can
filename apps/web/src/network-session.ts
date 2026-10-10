@@ -17,6 +17,7 @@ export class NetworkHuntSession implements HuntSession {
   private offset = 0;
   private attemptId = '';
   private inFlight = false;
+  private retryAt = 0; private failures = 0;
   private disposed = false;
   private connection: 'online' | 'reconnecting' | 'replaced' = 'online';
   private message = '';
@@ -77,13 +78,13 @@ export class NetworkHuntSession implements HuntSession {
   catch = (id: string) => this.action('catch', id);
   hint = () => this.action('hint');
   private async flush() {
-    if (this.disposed || this.inFlight || !this.attemptId || this.connection === 'replaced' || !this.pending.length) return;
+    if (Date.now() < this.retryAt || this.disposed || this.inFlight || !this.attemptId || this.connection === 'replaced' || !this.pending.length) return;
     this.inFlight = true; const batch = this.pending.slice(0, 128);
     try {
       const result = await this.client.commands(this.attemptId, this.controller, batch);
       if (this.disposed) return;
       const ack = result.view.attempt!.ack;
-      this.pending = this.pending.filter(c => c.seq > ack); this.connection = 'online'; this.message = '';
+      this.pending = this.pending.filter(c => c.seq > ack); this.connection = 'online'; this.message = ''; this.failures = 0; this.retryAt = 0;
       this.hydrate(result.view.attempt!.snapshot);
       for (const receipt of result.results) { this.resolvers.get(receipt.seq)?.(receipt.result); this.resolvers.delete(receipt.seq); }
       this.emit();
@@ -91,7 +92,8 @@ export class NetworkHuntSession implements HuntSession {
     } catch (error) {
       if (this.disposed) return;
       this.message = (error as Error).message;
-      this.connection = error instanceof RoomApiError && error.status >= 400 && error.status < 500 ? 'replaced' : 'reconnecting';
+      this.connection = error instanceof RoomApiError && error.status >= 400 && error.status < 500 && error.status !== 429 ? 'replaced' : 'reconnecting';
+      if (this.connection === 'reconnecting') this.retryAt = Date.now() + Math.min(60000, Math.max((error as RoomApiError).retryAfterMs || 0, Math.min(5000, 250 * 2 ** ++this.failures)));
       if (this.connection === 'replaced') { this.pending = []; for (const resolve of this.resolvers.values()) resolve(failed(this.message)); this.resolvers.clear(); }
       this.emit();
     } finally { this.inFlight = false; }

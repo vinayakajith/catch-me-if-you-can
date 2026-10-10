@@ -44,10 +44,12 @@ export class DevelopmentBudget {
   close() { this.db.close(); }
 }
 export class BudgetedImageProvider implements ImageProvider {
-  readonly model: string; readonly available: boolean; readonly testMode: boolean;
+  readonly model: string; readonly testMode: boolean;
+  get available() { return this.provider.available; }
+  get serviceStatus() { return this.provider.serviceStatus; }
   private provider: ImageProvider; private budget: DevelopmentBudget;
   constructor(provider: ImageProvider, budget: DevelopmentBudget) {
-    this.provider = provider; this.budget = budget; this.model = provider.model; this.available = provider.available; this.testMode = provider.testMode;
+    this.provider = provider; this.budget = budget; this.model = provider.model; this.testMode = provider.testMode;
   }
   get canAffordGeneration() { return this.budget.summary().remainingUsd + 1e-9 >= this.budget.reserveUsd; }
   async generate(input: Parameters<ImageProvider['generate']>[0]): Promise<ImageResult> {
@@ -59,7 +61,7 @@ export class BudgetedImageProvider implements ImageProvider {
     } catch (error) {
       // Access and quota rejection do not start generation. Everything else stays
       // reserved, including timeouts, 5xx, missing usage and crashes.
-      if (error instanceof GenerationError && ['access', 'quota', 'not_configured', 'request_limits'].includes(error.code)) this.budget.settle(reservation, 0);
+      if (error instanceof GenerationError && ['access', 'quota', 'not_configured', 'request_limits', 'service_paused'].includes(error.code)) this.budget.settle(reservation, 0);
       throw error;
     }
   }

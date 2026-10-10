@@ -9,19 +9,22 @@ import { CharacterJobs, JobError } from './jobs.ts';
 import { DiskAssetStore, SqliteJobStore } from './storage.ts';
 import { SqliteRoomStore } from './room-store.ts';
 import { Rooms, registerRooms } from './rooms.ts';
+import { registerSecurity, publicOrigin, type RateLimiter } from './security.ts';
 
 function owner(token?: string) { return createHash('sha256').update(token ?? '').digest('hex'); }
 function validName(value: unknown) {
   if (typeof value !== 'string') throw new JobError(400, 'Enter Dad’s name.');
   const name = value.trim().replace(/\s+/g, ' ');
-  if (!name || name.length > 32) throw new JobError(400, 'Dad’s name must be between 1 and 32 characters.');
+  if (!name || name.length > 32 || /[\u0000-\u001f\u007f]/.test(name)) throw new JobError(400, 'Dad’s name must be between 1 and 32 characters.');
   return name;
 }
 function bodyObject(value: unknown): Record<string, unknown> { return value && typeof value === 'object' ? value as Record<string, unknown> : {}; }
 
-export async function buildApp(options: { directory: string; provider: ImageProvider; dailyJobs?: number; clock?: () => number; retryDelayMs?: number }) {
+export async function buildApp(options: { directory: string; provider: ImageProvider; dailyJobs?: number; clock?: () => number; retryDelayMs?: number; publicOrigin?: string; limiter?: RateLimiter }) {
   const app = Fastify({ logger: false, bodyLimit: MAX_UPLOAD_BYTES + 16384 });
   await app.register(cookie);
+  const canonicalOrigin = publicOrigin(options.publicOrigin);
+  registerSecurity(app, { ...options, publicOrigin: canonicalOrigin });
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 1, parts: 2 } });
   const jobs = new CharacterJobs({ ...options, store: new SqliteJobStore(options.directory), assets: new DiskAssetStore(options.directory) });
   await jobs.initialize();
@@ -30,23 +33,15 @@ export async function buildApp(options: { directory: string; provider: ImageProv
   let cleanupWork: Promise<unknown> = Promise.resolve();
   const cleanup = setInterval(() => { cleanupWork = cleanupWork.then(() => Promise.all([jobs.cleanup(), rooms.cleanup()])).catch(() => console.error('Asset cleanup will retry.')); }, 60_000); cleanup.unref();
   app.addHook('onRequest', async (request, reply) => {
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      if (request.headers['x-fh-request'] !== '1') throw new JobError(403, 'Please use Father Hunter to create your Dad.');
-      const origin = request.headers.origin;
-      if (origin) {
-        let host: string; try { host = new URL(origin).host; } catch { throw new JobError(403, 'Invalid origin.'); }
-        if (host !== request.headers.host) throw new JobError(403, 'Open this page from the Father Hunter address.');
-      }
-    }
     if (!/^[a-f0-9]{64}$/.test(request.cookies['fh-owner'] ?? '')) {
       const token = randomBytes(32).toString('hex'); request.cookies['fh-owner'] = token;
-      reply.setCookie('fh-owner', token, { path: '/api', httpOnly: true, sameSite: 'strict', maxAge: 7 * 86400, secure: request.protocol === 'https' });
+      reply.setCookie('fh-owner', token, { path: '/api', httpOnly: true, sameSite: 'strict', maxAge: 7 * 86400, secure: !!canonicalOrigin || request.protocol === 'https' });
     }
     reply.header('Cache-Control', 'private, no-store');
     reply.header('X-Content-Type-Options', 'nosniff');
   });
-  app.get('/api/characters/config', async () => ({ available: options.provider.available, testMode: options.provider.testMode, maxUploadBytes: MAX_UPLOAD_BYTES,
-    message: options.provider.available ? undefined : 'Photo generation is not connected yet. Sample Balaji is ready to play.' }));
+  app.get('/api/characters/config', async () => ({ available: options.provider.available && options.provider.canAffordGeneration !== false, testMode: options.provider.testMode, maxUploadBytes: MAX_UPLOAD_BYTES,
+    message: options.provider.serviceStatus?.message ?? (options.provider.canAffordGeneration === false ? 'Photo generation has reached its budget. Your completed faces are saved. Sample artwork is ready to play.' : options.provider.available ? undefined : 'Photo generation is not connected yet. Sample artwork is ready to play.') }));
   app.get<{ Params: { key: string } }>('/api/characters/uploads/:key', async request => jobs.view(jobs.findUpload(owner(request.cookies['fh-owner']), request.params.key)));
   app.post('/api/characters', async (request, reply) => {
     const key = request.headers['idempotency-key'];
@@ -81,7 +76,7 @@ export async function buildApp(options: { directory: string; provider: ImageProv
     const bytes = await jobs.asset(request.params.id, owner(request.cookies['fh-owner']), request.params.name);
     return reply.type(request.params.name.endsWith('.jpg') ? 'image/jpeg' : 'image/png').send(bytes);
   });
-  registerRooms(app, rooms);
+  registerRooms(app, rooms, canonicalOrigin);
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof JobError) return reply.code(error.status).send({ message: error.message });
     if (error instanceof GenerationError) return reply.code(400).send({ message: error.message });

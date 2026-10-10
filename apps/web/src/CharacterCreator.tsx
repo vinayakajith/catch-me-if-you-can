@@ -51,7 +51,7 @@ function DadShowcase({ father }: { father: CharacterPack }) {
   </div>;
 }
 
-export function CharacterCreator({ initialName, fresh = false, onReady, onClose, onSample }: { initialName: string; fresh?: boolean; onReady(father: CharacterPack): void; onClose(): void; onSample(): void }) {
+export function CharacterCreator({ initialName, fresh = false, onReady, onClose, onSample }: { initialName: string; fresh?: boolean; onReady(father: CharacterPack): void; onClose(): void; onSample(name: string): void }) {
   const [name, setName] = useState(initialName), [job, setJob] = useState<CharacterJobView | null>(null);
   const [jobId, setJobId] = useState<string | null>(() => fresh || pendingCharacterUpload() ? null : savedCharacterJob());
   const [pendingUpload, setPendingUpload] = useState(Boolean(pendingCharacterUpload()));
@@ -86,7 +86,7 @@ export function CharacterCreator({ initialName, fresh = false, onReady, onClose,
         if (loadedNameFor.current !== next.id) { loadedNameFor.current = next.id; setName(next.name); }
         setJob(next); setConnectionError('');
         if (['uploading', 'queued', 'generating'].includes(next.status)) timer = setTimeout(poll, 1800);
-        else if (next.error?.code === 'development_budget') timer = setTimeout(poll, 3500);
+        else if (next.error && ['development_budget', 'quota', 'access', 'service_paused', 'not_configured'].includes(next.error.code)) timer = setTimeout(poll, 10000);
       } catch (fault) {
         if (stopped) return;
         if (fault instanceof CharacterApiError && [404, 410].includes(fault.status)) {
@@ -161,7 +161,7 @@ export function CharacterCreator({ initialName, fresh = false, onReady, onClose,
         <div className="lab-actions">{base ? <><button type="button" className="button primary" disabled={busy || !imageReady} onClick={() => { void act('approve'); }}>That’s him. Make him worse. <ArrowRight size={18} /></button>{job.retryableExpressions.includes('grin') && <button type="button" className="text-button" disabled={busy} onClick={() => { void act('retry', 'grin'); }}><RotateCcw size={15} /> Redraw his face</button>}</> : <><label className="lab-final-name">Troublemaker’s name<input aria-label="Final troublemaker name" value={name} maxLength={32} onChange={e => setName(e.target.value)} /></label><button type="button" className="button primary" disabled={busy || !imageReady || !name.trim()} onClick={() => { if (job.status === 'ready') onReady({ ...pack, name: name.trim() }); else void act('finalize'); }} data-testid="use-character">Use {displayName} <ArrowRight size={18} /></button></>}<button type="button" className="text-button" disabled={busy} onClick={reset}>Choose another photo</button></div>
       </section>}
       {job?.error && !working && !finalPreview && <section className="lab-failure"><div className="lab-failure-icon">!</div><h2>{displayName}’s experiment hit a snag.</h2><p role="alert">{personalCopy(job.error.message, displayName)}</p><p>{job.completed.length > 0 ? `${job.completed.length} completed ${job.completed.length === 1 ? 'face is' : 'faces are'} saved.` : job.sourceUrl ? 'Your photo is saved. No need to upload it again.' : 'Choose the photo again when you’re ready.'}</p>{job.error.canRetry && <button type="button" className="button primary" disabled={busy} onClick={() => { void act('retry', job.currentExpression ?? 'grin'); }}>Retry this face <RotateCcw size={16} /></button>}<button type="button" className="text-button" disabled={busy} onClick={reset}>Choose another photo</button></section>}
-      <footer className="lab-footer"><button type="button" className="text-button" onClick={onSample}>Play with sample artwork</button><span>One photo. A whole houseful of {displayName}.</span></footer>
+      <footer className="lab-footer"><button type="button" className="text-button" onClick={() => onSample(displayName)}>Play with sample artwork</button><span>One photo. A whole houseful of {displayName}.</span></footer>
     </main>
   </div>;
 }

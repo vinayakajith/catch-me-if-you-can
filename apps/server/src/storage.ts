@@ -26,7 +26,7 @@ export class DiskAssetStore implements AssetStore {
   private root: string;
   constructor(directory: string) { this.root = join(directory, 'assets'); mkdirSync(this.root, { recursive: true, mode: 0o700 }); }
   private path(id: string, name?: string) {
-    if (!/^[a-f0-9-]{36}$/.test(id) || (name && !/^[a-z0-9.-]+$/.test(name))) throw new Error('Invalid asset path');
+    if (!/^[a-f0-9-]{36}$/.test(id) || (name && (!/^[a-z0-9][a-z0-9.-]*$/.test(name) || name.includes('..')))) throw new Error('Invalid asset path');
     return name ? join(this.root, id, name) : join(this.root, id);
   }
   async read(id: string, name: string) { return readFile(this.path(id, name)); }

@@ -71,7 +71,7 @@ test('transient failures retry only their step; quota and uncertain outcomes nev
   assert.equal(jobs.view(job).remainingAttempts, 0); assert.throws(() => jobs.retry(job.id, 'owner', 'laugh', 1), /retry allowance/);
   provider.failures.push(new GenerationError('quota', 'budget reached'));
   const other = await jobs.create('owner', 'quota-key-1234567', 'Dad', await portrait()); await jobs.idle();
-  assert.equal(jobs.get(other.id, 'owner').attempts, 1); assert.equal(jobs.view(jobs.get(other.id, 'owner')).error?.canRetry, false);
+  assert.equal(jobs.get(other.id, 'owner').attempts, 0); assert.equal(jobs.view(jobs.get(other.id, 'owner')).error?.canRetry, true);
 });
 
 test('a stored in-flight request becomes interrupted after restart without another call', async t => {

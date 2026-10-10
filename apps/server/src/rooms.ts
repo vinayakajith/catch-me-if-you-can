@@ -43,8 +43,9 @@ export class Rooms {
     for (let n = 0; n < 5; n++) {
       const room = await this.get(id), revision = room.revision, value = action(room);
       if (await this.store.save(room, revision)) return value;
+      await new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 20));
     }
-    throw new JobError(409, 'The room changed. Try that again.');
+    throw new JobError(503, 'The room is busy. Reconnecting shortly…');
   }
   private session(player: RoomPlayer) { return player.attempt ? LocalHuntSession.restore(player.attempt.checkpoint, this.clock) : null; }
   async create(owner: string, data: Record<string, unknown>, idem: string): Promise<RoomView> {
@@ -178,12 +179,12 @@ export class Rooms {
   async close() { await this.store.close(); }
 }
 
-export function registerRooms(app: FastifyInstance, rooms: Rooms) {
+export function registerRooms(app: FastifyInstance, rooms: Rooms, canonicalOrigin?: string) {
   type Params = { id: string; attemptId: string; name: string };
   app.get('/api/rooms/config', async request => {
     const current = new URL(`${request.protocol}://${request.headers.host}`);
     const addresses = Object.values(networkInterfaces()).flat().filter(a => a && !a.internal && a.family === 'IPv4' && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a => a!.address);
-    const configured = process.env.FATHER_HUNTER_SHARE_ORIGIN;
+    const configured = canonicalOrigin || process.env.FATHER_HUNTER_SHARE_ORIGIN;
     const localhost = ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
     if (localhost && addresses[0]) current.hostname = addresses[0];
     return { shareOrigin: configured || current.origin, public: !!configured && configured.startsWith('https://'), lanAvailable: !localhost || addresses.length > 0 || !!configured };
