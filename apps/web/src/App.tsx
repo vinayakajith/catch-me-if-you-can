@@ -99,6 +99,22 @@ function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }:
   const remaining = state.targets.length - state.player.score;
   const ended = state.status === 'finished' || state.status === 'expired';
   bridge.inputEnabled = ready && !ended && !leaving && !help && !mapOpen;
+  useEffect(() => {
+    if (!ended && !leaving && !help) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    dialog?.querySelector<HTMLButtonElement>('button')?.focus();
+    const trap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !ended) { setHelp(false); setLeaving(false); }
+      if (event.key !== 'Tab' || !dialog) return;
+      const buttons = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')];
+      const first = buttons[0], last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', trap);
+    return () => { document.removeEventListener('keydown', trap); previous?.focus(); };
+  }, [ended, leaving, help]);
   const coach = state.player.score > 0 ? 'You got him! Keep exploring. Every room has more questionable alibis.' : state.opened.some(id => state.targets.some(t => t.slotId === id)) ? 'There he is! Tap Balaji’s face to catch him and score a point.' : state.player.roomId !== 'hall' ? 'Tap furniture to check it. Look closely for little glimpses of a face.' : 'Tap a doorway to explore. The living room is a good place to start.';
   const navigate = (point: Point) => { bridge.navigate?.(point); setMapOpen(false); };
 

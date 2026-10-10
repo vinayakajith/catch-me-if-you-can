@@ -73,7 +73,7 @@ export class HouseScene extends Phaser.Scene {
     this.scale.on('resize', this.resize, this);
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E') as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.getDistance() > 14 || this.stopped) return;
+      if (pointer.getDistance() > 14 || this.stopped || (pointer.event.target as HTMLElement | null)?.tagName !== 'CANVAS') return;
       const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       this.tap(point);
     });
@@ -89,7 +89,7 @@ export class HouseScene extends Phaser.Scene {
       // Development-only browser test access; never present in production builds.
       (window as unknown as { __huntTest: unknown }).__huntTest = { session: this.bridge.session, scene: this,
         tap: (p: Point) => this.tap(p), walk: (p: Point) => this.walkTo(p),
-        screen: (p: Point) => ({ x: (p.x - this.cameras.main.scrollX) * this.cameras.main.zoom, y: (p.y - this.cameras.main.scrollY) * this.cameras.main.zoom }),
+        screen: (p: Point) => ({ x: (p.x - this.cameras.main.worldView.x) * this.cameras.main.zoom, y: (p.y - this.cameras.main.worldView.y) * this.cameras.main.zoom }),
         slots: HOUSE.slots,
       };
     }
@@ -161,7 +161,7 @@ export class HouseScene extends Phaser.Scene {
       if (!target || (slot.mode === 'search' && !state.opened.includes(slot.id))) continue;
       const p = this.dadPoint(slot);
       const hit = state.opened.includes(slot.id) ? { x: p.x - 30, y: p.y - 35, w: 60, h: 65 } : slot.hit;
-      if (contains(hit, point, 3)) { this.walkTo(slot.anchor, { type: 'catch', slotId: slot.id }); return; }
+      if (contains(hit, point, 10)) { this.walkTo(slot.anchor, { type: 'catch', slotId: slot.id }); return; }
     }
     const prop = HOUSE.slots.find(s => s.roomId === state.player.roomId && contains(s.prop, point, 5));
     if (prop) this.walkTo(prop.anchor, { type: 'search', slotId: prop.id });
@@ -255,6 +255,9 @@ export class HouseScene extends Phaser.Scene {
     this.previousPosition = pos;
     this.hunter.setPosition(pos.x, pos.y - 25 + (moving && !this.bridge.reducedMotion ? Math.sin(_time / 85) * 2 : 0));
     if (direction.x) this.hunter.setFlipX(direction.x < 0);
+    for (const slot of HOUSE.slots.filter(s => ['plant', 'curtain', 'shower'].includes(s.kind))) {
+      this.props.get(slot.id)!.setRotation(this.bridge.reducedMotion ? 0 : Math.sin(_time / 1300 + slot.target.x) * .009);
+    }
     this.destination.setVisible(this.route.length > 0 && !this.stopped);
     this.searchBar.clear();
     if (state.search) {
