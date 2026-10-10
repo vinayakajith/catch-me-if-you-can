@@ -3,7 +3,7 @@ import { HOUSE, broomPosition, roomAt, clearPath, canReach, contains, distance, 
 import { DAD_POSES, bodySvg } from '../art/dad';
 import { prepareCharacters } from './characters';
 import { hideoutSvg, sackSvg, svgUri } from './art';
-import { agentSvg, hammerHeadSvg } from '../art/agent';
+import { witchSvg, hammerHeadSvg } from '../art/witch';
 
 export interface GameBridge {
   session: HuntSession;
@@ -55,7 +55,7 @@ export class HouseScene extends Phaser.Scene {
   preload() {
     const density = this.bridge.pixelRatio ?? 1;
     this.load.image('father-source', this.bridge.session.getSnapshot().father.atlas);
-    for (let frame = 0; frame < 6; frame++) this.load.svg(`agent-${frame}`, svgUri(agentSvg(frame)), { width: 160 * density, height: 220 * density });
+    for (let frame = 0; frame < 6; frame++) this.load.svg(`witch-${frame}`, svgUri(witchSvg(frame)), { width: 160 * density, height: 220 * density });
     this.load.svg('hammer-head', svgUri(hammerHeadSvg), { width: 240, height: 128 });
     for (const pose of DAD_POSES) this.load.svg(`body-${pose}`, svgUri(bodySvg(pose, this.bridge.session.getSnapshot().father.palette?.skin)), { width: 160 * density, height: 220 * density });
     this.load.svg('sack', svgUri(sackSvg), { width: 160 * density, height: 160 * density });
@@ -85,7 +85,7 @@ export class HouseScene extends Phaser.Scene {
     }
     this.captureDad = this.add.image(0, 0, 'father-caught', father.expressions.laugh).setVisible(false).setDepth(2100);
     this.sack = this.add.image(HOUSE.spawn.x + 25, HOUSE.spawn.y - 6, 'sack').setOrigin(.5, 1).setDisplaySize(30, 34).setDepth(1999);
-    this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y, 'agent', 0).setOrigin(.5, .94).setDisplaySize(73, 100).setDepth(2000);
+    this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y, 'witch', 0).setOrigin(.5, .94).setDisplaySize(73, 100).setDepth(2000);
     this.hammerHead = this.add.image(0, 0, 'hammer-head').setDisplaySize(62, 33).setDepth(2250).setVisible(false);
     this.captureFX = this.add.graphics().setDepth(2200);
     this.searchBar = this.add.graphics().setDepth(2200);

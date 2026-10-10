@@ -18,8 +18,8 @@ async function available() {
 async function start(page, name, seed = fixtureSeed, options = {}) {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${baseURL}/?test=1&seed=${encodeURIComponent(seed)}`, { waitUntil: 'networkidle' });
-  await page.getByLabel('WHAT SHOULD WE CALL YOU, AGENT?').fill(name);
-  await page.getByLabel('WHO’S THE WITCH-SCIENTIST?').fill(options.fatherName || 'Balaji');
+  await page.getByLabel('WHAT SHOULD WE CALL YOU?').fill(name);
+  await page.getByLabel('WHO’S THE TROUBLEMAKER?').fill(options.fatherName || 'Balaji');
   await page.getByRole('button', { name: 'Play solo', exact: true }).click();
   await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
   await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready', undefined, { timeout: 20000 });
@@ -33,13 +33,13 @@ async function start(page, name, seed = fixtureSeed, options = {}) {
   assert.equal(await page.locator('.activity-list').count(), 0, 'No mid-game gossip feed');
   const rendering = await page.evaluate(() => { const canvas = document.querySelector('.game-canvas canvas'), box = canvas.getBoundingClientRect(); return { ratio: canvas.width / box.width, expected: Math.min(2, devicePixelRatio), texture: window.__huntTest.scene.hunter.texture.key }; });
   assert.ok(Math.abs(rendering.ratio - rendering.expected) < .01, 'Canvas renders at the capped device pixel ratio');
-  assert.equal(rendering.texture, 'agent', 'The suited agent rig is used');
+  assert.equal(rendering.texture, 'witch', 'The violet witch rig is used');
   await page.getByRole('button', { name: 'Dismiss guidance' }).click();
 }
 
 async function reviewIntro(page, fatherName, mobile) {
   const scene = id => page.locator(`.intro-stage[data-scene="${id}"]`);
-  assert.equal(await page.locator('#intro-title').innerText(), `Dr. ${fatherName}. Witch-scientist.`);
+  assert.equal(await page.locator('#intro-title').innerText(), `${fatherName}. Unpaid assistant.`);
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.name), fatherName);
   await scene('experiment').waitFor();
   await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-experiment.png`, artifacts).pathname });

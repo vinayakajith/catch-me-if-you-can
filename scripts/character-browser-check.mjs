@@ -39,7 +39,7 @@ try {
     await page.goto(`${baseURL}/?test=1&seed=personal-dad`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: /Use .+’s photo/ }).click();
     await page.getByLabel('a portrait photo', { exact: true }).setInputFiles({ name: 'portrait.jpg', mimeType: 'image/jpeg', buffer: await portrait() });
-    await page.getByLabel('Scientist’s name', { exact: true }).fill(mobile ? 'Suresh' : 'Ajith');
+    await page.getByLabel('Troublemaker’s name', { exact: true }).fill(mobile ? 'Suresh' : 'Ajith');
     await page.getByLabel('Photo zoom', { exact: true }).fill('1.2');
     await page.getByRole('button', { name: 'Rotate photo', exact: true }).click();
     await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-photo-crop.png`, artifacts).pathname });
@@ -84,8 +84,8 @@ try {
     await page.getByTestId('use-character').click();
     await page.getByRole('button', { name: /is ready/ }).waitFor();
     assert.equal(provider.calls.length, before + 6, 'Lost finalize response does not regenerate');
-    await page.getByLabel('WHO’S THE WITCH-SCIENTIST?').fill('Vijayan');
-    await page.getByLabel('WHAT SHOULD WE CALL YOU, AGENT?').fill(mobile ? 'Mobile' : 'Desktop');
+    await page.getByLabel('WHO’S THE TROUBLEMAKER?').fill('Vijayan');
+    await page.getByLabel('WHAT SHOULD WE CALL YOU?').fill(mobile ? 'Mobile' : 'Desktop');
     await page.getByRole('button', { name: 'Play solo', exact: true }).click();
     await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'ready');
     const father = await page.evaluate(() => window.__huntTest.session.getSnapshot().father);

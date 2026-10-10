@@ -53,7 +53,7 @@ try {
   assert.equal(path, `/r/${lostRoom}`, 'Lost creation response retries the same room');
   await host.goto(`${base}${path}?test=1`);
   await Promise.all(pages.slice(1).map(async (page, i) => {
-    await page.goto(`${base}${path}?test=1`); await page.getByLabel('Agent name', { exact: true }).fill(['Vinayak', 'Aravind', 'Meera', 'Ravi'][i]);
+    await page.goto(`${base}${path}?test=1`); await page.getByLabel('Your name', { exact: true }).fill(['Vinayak', 'Aravind', 'Meera', 'Ravi'][i]);
     await page.getByRole('button', { name: 'Join the hunt', exact: true }).click(); await page.getByRole('button', { name: 'Enter the house', exact: true }).waitFor();
   }));
   const sixth = await browser.newPage(); await sixth.goto(`${base}${path}`); await sixth.getByRole('button', { name: 'All five seats are taken', exact: true }).waitFor(); await sixth.close();

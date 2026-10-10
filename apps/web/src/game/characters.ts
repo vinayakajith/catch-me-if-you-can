@@ -42,8 +42,8 @@ export function prepareCharacters(scene: Phaser.Scene, father: CharacterPack, de
     }
     scene.textures.addSpriteSheet(`spin-${kind}`, scene.textures.addCanvas(`spin-${kind}`, canvas)!, { frameWidth: 160 * density, frameHeight: 160 * density });
   }
-  const agent = document.createElement('canvas'); agent.width = 160 * 6 * density; agent.height = 220 * density;
-  const ctx = agent.getContext('2d')!; ctx.scale(density, density);
-  for (let frame = 0; frame < 6; frame++) ctx.drawImage(scene.textures.get(`agent-${frame}`).getSourceImage() as HTMLImageElement, frame * 160, 0, 160, 220);
-  scene.textures.addSpriteSheet('agent', scene.textures.addCanvas('agent', agent)!, { frameWidth: 160 * density, frameHeight: 220 * density });
+  const witch = document.createElement('canvas'); witch.width = 160 * 6 * density; witch.height = 220 * density;
+  const ctx = witch.getContext('2d')!; ctx.scale(density, density);
+  for (let frame = 0; frame < 6; frame++) ctx.drawImage(scene.textures.get(`witch-${frame}`).getSourceImage() as HTMLImageElement, frame * 160, 0, 160, 220);
+  scene.textures.addSpriteSheet('witch', scene.textures.addCanvas('witch', witch)!, { frameWidth: 160 * density, frameHeight: 220 * density });
 }

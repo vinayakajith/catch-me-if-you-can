@@ -71,15 +71,15 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
     <main>
       <section className="hero">
         <div className="hero-copy">
-          <div className="eyebrow"><span className="tiny-star">✳</span> A GOVERNMENT-SIZED SCREW-UP</div>
+          <div className="eyebrow"><span className="tiny-star">✳</span> ONE ASSISTANT. ZERO SUPERVISION.</div>
           <h1><span className="named-headline" style={{ fontSize: father.name.length > 12 ? ".65em" : undefined }}>One {father.name}.</span>All chaos.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
-          <p className="hero-description">{father.name} put witchcraft in a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the agent sent to clean up the shitshow.</p>
+          <p className="hero-description">{father.name} was the witch’s assistant. Then he walked into her time machine.<br className="desktop-break" /> You’re the witch. Time to clean up his shitshow.</p>
           <form className="start-form" onSubmit={submit}>
             <div className="personal-dad"><button type="button" className="photo-start" onClick={() => setCreating(true)}>{selected ? <Dad character={father} expression={1} /> : <Upload size={22} />}<span><strong>{selected ? `${father.name} is ready` : resume ? `Continue making ${father.name}` : `Use ${father.name}’s photo`}</strong><small>{selected ? 'Six faces. Extremely questionable intentions.' : resume ? 'His progress is saved. Pick up where you left off.' : 'Turn him into the actual troublemaker.'}</small></span><ArrowRight size={17} /></button>{selected && <button type="button" className="sample-switch" onClick={() => { setSelected(null); setResume(false); rememberCharacterJob(null); setPhotoError(''); }}>Use sample Balaji instead</button>}</div>
             {photoError && <p role="alert" className="photo-warning">{personalCopy(photoError, father.name)}</p>}
-            <label htmlFor="father-name">WHO’S THE WITCH-SCIENTIST?</label>
-            <div className="father-field"><span>Dr.</span><input id="father-name" name="fatherName" autoComplete="off" maxLength={32} value={fatherName} onChange={e => setFatherName(e.target.value)} required /></div>
-            <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, AGENT?</label>
+            <label htmlFor="father-name">WHO’S THE TROUBLEMAKER?</label>
+            <div className="father-field"><span>Mr.</span><input id="father-name" name="fatherName" autoComplete="off" maxLength={32} value={fatherName} onChange={e => setFatherName(e.target.value)} required /></div>
+            <label htmlFor="player-name">WHAT SHOULD WE CALL YOU?</label>
             <div className="start-fields"><input id="player-name" name="name" autoComplete="given-name" placeholder="Your name" maxLength={24} value={name} onChange={e => setName(e.target.value)} required /><button className="button primary" type="submit" disabled={hosting}>{hosting ? 'Creating…' : 'Create hunt'} <ArrowRight size={20} /></button></div>
             <button type="button" className="text-button solo-link" disabled={hosting || !name.trim() || !fatherName.trim()} onClick={() => onStart(name.trim(), father)}>Play solo <ArrowRight size={14} /></button><div className="start-note"><Check size={14} /> No signup. No gaming skills. Just suspicious instincts.</div>
           </form>
@@ -89,14 +89,14 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
           <div className="scribble scribble-top">peer review: absolutely not <span>↴</span></div>
           <div className="poster-back" />
           <article className="wanted-poster">
-            <div className="tape" /><div className="poster-topline"><span>BUREAU OF TEMPORAL NONSENSE</span><span>CASE No. 001</span></div>
-            <div className="wanted-title">WANTED FOR<br />ILLEGAL SCIENCE</div>
+            <div className="tape" /><div className="poster-topline"><span>THE WITCH’S MISSING ASSISTANT</span><span>CASE No. 001</span></div>
+            <div className="wanted-title">WANTED FOR<br />EXTREME STUPIDITY</div>
             <div className="portrait-stage"><div className="portrait-grid" /><Dad character={father} /><span className="portrait-bubble">“I see no flaws<br />in my work.”</span></div>
-            <div className="poster-name">{father.name}<span>Dr. is a self-awarded title.</span></div>
+            <div className="poster-name">{father.name}<span>Assistant. Against all advice.</span></div>
             <p>Illegal copies. Absolutely no impulse control.<br />May be hiding in your commode.</p>
             <div className="poster-stamp">TOO MANY {father.name.toUpperCase()}S · 0 PERMITS</div>
           </article>
-          <div className="little-label"><span>✳</span><div>GOVERNMENT EQUIPMENT<strong>One sack. Budget cuts.</strong></div></div>
+          <div className="little-label"><span>✳</span><div>THE WITCH’S EQUIPMENT<strong>One sack. No patience.</strong></div></div>
           <span className="art-star star-one">✳</span><span className="art-star star-two">✧</span>
         </div>
       </section>
@@ -108,6 +108,6 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
         </div>
       </section>
     </main>
-    <footer className="site-footer"><Brand /><p>Made for laughs. And a mildly embarrassed {father.name}.</p><span>FIVE AGENTS. ONE BAD IDEA.</span></footer>
+    <footer className="site-footer"><Brand /><p>Made for laughs. And a mildly embarrassed {father.name}.</p><span>FIVE FRIENDS. ONE BAD IDEA.</span></footer>
   </div>;
 }

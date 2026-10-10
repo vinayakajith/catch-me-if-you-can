@@ -70,9 +70,9 @@ export class Rooms {
     await this.change(id, room => {
       this.open(room);
       if (room.players.some(p => p.owner === owner)) return;
-      if (room.players.length >= MAX_PLAYERS) throw new JobError(409, 'All five agent seats are taken.');
+      if (room.players.length >= MAX_PLAYERS) throw new JobError(409, 'All five player seats are taken.');
       const clean = name(playerName);
-      if (room.players.some(p => p.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) throw new JobError(409, 'That agent name is taken. Add a nickname.');
+      if (room.players.some(p => p.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) throw new JobError(409, 'That name is taken. Add a nickname.');
       room.players.push({ id: randomUUID(), owner, name: clean, joinedAt: this.clock(), bestScore: 0, attempt: null });
     });
     return this.view(id, owner);
@@ -139,7 +139,7 @@ export class Rooms {
           if (command.kind === 'catch' && result.ok) {
             const snapshot = session.getSnapshot(), target = snapshot.targets.find(t => t.id === command.id)!;
             const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId) : null;
-            const location = slot ? slot.kind === 'toilet' ? 'from the commode. Government work.' : `from ${slot.kind === 'bed' ? 'under the bed' : `the ${slot.name}`}.` : 'off a flying broom. No licence.';
+            const location = slot ? slot.kind === 'toilet' ? 'from the commode. The witch wants a refund.' : `from ${slot.kind === 'bed' ? 'under the bed' : `the ${slot.name}`}.` : 'off a flying broom. No licence.';
             room.events.push({ id: ++room.cursor, playerId: player.id, attemptId, text: `${player.name} bagged a ${room.father.name} ${location}`, at: now });
             room.events = room.events.slice(-100); player.bestScore = Math.max(player.bestScore, snapshot.player.score);
           }
