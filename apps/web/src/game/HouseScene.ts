@@ -386,7 +386,10 @@ export class HouseScene extends Phaser.Scene {
       this.searchBar.fillStyle(0xf4c86e).fillRoundedRect(slot.prop.x + slot.prop.w / 2 - 28, slot.prop.y - 12, 56 * progress, 4, 2);
     }
     if (!this.bridge.inputEnabled || this.capturing || this.acting) {
-      this.route = []; this.pending = undefined; this.bridge.movement = { x: 0, y: 0 }; this.destination.setVisible(false); return;
+      // Keep a tap-to-walk destination through a temporary connection pause.
+      // The player should not need to tap the same face again after backoff.
+      if (stateBefore.connection !== 'reconnecting' || stateBefore.status !== 'playing') { this.route = []; this.pending = undefined; }
+      this.bridge.movement = { x: 0, y: 0 }; this.destination.setVisible(false); return;
     }
     const k = this.keys;
     const keyDirection = { x: Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.LEFT.isDown), y: Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.UP.isDown) };
@@ -396,6 +399,9 @@ export class HouseScene extends Phaser.Scene {
     else if (this.route.length) {
       const pos = this.bridge.session.getSnapshot().player.position;
       while (this.route.length && distance(pos, this.route[0]) < .1) this.route.shift();
+      // A server correction can put us before a corner already passed by the
+      // predicted route. Plan around that corner again instead of hitting a wall.
+      if (this.route.length && !clearPath(pos, this.route[0])) this.route = findPath(pos, this.route.at(-1)!);
       if (this.route.length) {
         const next = this.route[0], d = distance(pos, next);
         direction = { x: (next.x - pos.x) / d, y: (next.y - pos.y) / d };

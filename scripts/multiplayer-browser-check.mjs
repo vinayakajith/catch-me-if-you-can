@@ -68,6 +68,13 @@ try {
   }));
   console.log('PASS personal room creation survives lost reply; five browsers load the shared character; sixth rejected; timers start after intro');
   let lostCatch = false, repeatedCatch = false, lostSequence;
+  let throttledMove = false;
+  await pages[2].route('**/commands', async route => {
+    if (!throttledMove && route.request().postDataJSON().commands.some(c => c.kind === 'move')) {
+      throttledMove = true;
+      await route.fulfill({ status: 429, headers: { 'retry-after': '1', 'content-type': 'application/json' }, body: JSON.stringify({ message: 'Taking a breath. Reconnecting shortly…' }) });
+    } else await route.continue();
+  });
   await host.route('**/commands', async route => {
     const catchCommand = route.request().postDataJSON().commands.find(c => c.kind === 'catch');
     if (catchCommand && !lostCatch) {
@@ -78,10 +85,15 @@ try {
   });
   await Promise.all(pages.map(async page => {
     await page.evaluate(() => { const t = window.__huntTest; const target = t.session.getSnapshot().targets.find(t => t.kind === 'hidden' && t.slotId === 'living-statue'); void t.tap(t.face(target.id)); });
-    await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().player.score === 1, undefined, { timeout: 20000 });
+    try { await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().player.score === 1, undefined, { timeout: 20000 }); }
+    catch (error) {
+      console.error('Catch diagnostics', await page.evaluate(() => { const t = window.__huntTest, s = t.session.getSnapshot(); return { player: s.player, connection: s.connection, message: s.connectionMessage, status: s.status, pending: s.pendingActions, route: t.scene.route, action: t.scene.pending, acting: t.scene.acting, enabled: t.scene.bridge.inputEnabled }; }));
+      throw error;
+    }
     await page.waitForFunction(() => window.__huntTest?.presentation().bagged === 1);
   }));
   assert.ok(lostCatch && repeatedCatch, 'Confirmed catch with a lost reply was retried');
+  assert.ok(throttledMove, 'A rate-limited movement batch resumes the original walk without another tap');
   const confirmed = await (await host.request.get(`${base}${path.replace('/r/', '/api/rooms/')}/state`)).json();
   assert.equal(confirmed.cursor, 5, 'Retries create no duplicate catch events or points');
   await host.waitForFunction(() => [...document.querySelectorAll('.case-file .standing-score')].length === 5 && [...document.querySelectorAll('.case-file .standing-score')].every(el => el.textContent === '1'));
