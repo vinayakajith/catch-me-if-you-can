@@ -58,7 +58,7 @@ for (const room of rooms.filter(r => r.id !== 'hall')) {
     const prop = { x: room.x + x - w / 2, y: room.y + y - h / 2, w, h };
     const target = { x: prop.x + w * tx, y: prop.y + h * ty };
     const slot: HidingSlot = { id: `${room.id}-${kind}`, roomId, kind, name, mode, prop,
-      anchor: { x: prop.x + w / 2, y: prop.y + h + 28 }, target,
+      anchor: { x: prop.x + w / 2 + 56, y: prop.y + h + 32 }, target,
       hit: { x: target.x - 28, y: target.y - 28, w: 56, h: 56 },
       pose: { angle, width, height, crop }, reveal,
       peek: { visibleMs: 2100, hiddenMs: 3200 + slots.length % 5 * 150 } };

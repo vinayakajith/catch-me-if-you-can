@@ -206,3 +206,13 @@ test('peek schedules are deterministic, staggered, and inspect can uncover a hid
   walkTo(f.session, slot.anchor); f.session.search(slot.id); f.advance(1000); f.session.tick();
   assert.equal(f.session.catch(slot.id).ok, true);
 });
+
+test('every pair of hideouts supports a physical return route without clipping a doorway corner', () => {
+  const { session } = fixture();
+  for (const from of HOUSE.slots) for (const to of HOUSE.slots) {
+    if (from === to) continue;
+    walkTo(session, from.anchor);
+    walkTo(session, to.anchor);
+    assert.ok(canReach(session.getSnapshot().player.position, to), `${from.id} -> ${to.id}`);
+  }
+});

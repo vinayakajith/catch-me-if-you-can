@@ -197,14 +197,18 @@ export class HouseScene extends Phaser.Scene {
 
   private perform() {
     const action = this.pending; this.pending = undefined;
-    if (action) this.bridge.feedback(this.bridge.session[action.type](action.slotId));
+    if (action) {
+      const slot = HOUSE.slots.find(s => s.id === action.slotId)!;
+      this.hunter.setFlipX(slot.target.x < this.bridge.session.getSnapshot().player.position.x);
+      this.bridge.feedback(this.bridge.session[action.type](action.slotId));
+    }
   }
 
   private inspectNearest() {
     if (!this.bridge.inputEnabled || this.capturing) return;
     const state = this.bridge.session.getSnapshot();
     const near = HOUSE.slots.filter(s => canReach(state.player.position, s) && !state.opened.includes(s.id)).sort((a, b) => distance(a.anchor, state.player.position) - distance(b.anchor, state.player.position))[0];
-    if (near) this.bridge.feedback(this.bridge.session.search(near.id));
+    if (near) { this.hunter.setFlipX(near.target.x < state.player.position.x); this.bridge.feedback(this.bridge.session.search(near.id)); }
     else this.bridge.feedback({ ok: false, kind: 'error', message: 'Tap some furniture to walk over and check it.' });
   }
 
@@ -296,7 +300,7 @@ export class HouseScene extends Phaser.Scene {
     const stateBefore = this.bridge.session.getSnapshot();
     const bagSize = 30 + this.bagCount * 4;
     const wiggle = !this.bridge.reducedMotion && this.bagCount > 0 ? Math.sin(time / 160) * Math.max(0, Math.sin(time / 900)) : 0;
-    this.sack.setDisplaySize(bagSize + wiggle * 2, bagSize * 1.08 - wiggle * 2).setPosition(this.hunter.x + (this.hunter.flipX ? -28 : 28), this.hunter.y - 4).setAngle(wiggle * 5);
+    this.sack.setDisplaySize(bagSize + wiggle * 2, bagSize * 1.08 - wiggle * 2).setPosition(this.hunter.x + (this.hunter.flipX ? 28 : -28), this.hunter.y - 4).setAngle(wiggle * 5);
     this.searchBar.clear();
     if (stateBefore.search) {
       this.hunter.setFrame(3).setOrigin(.5, .9);
@@ -314,7 +318,7 @@ export class HouseScene extends Phaser.Scene {
     if (direction.x || direction.y) { this.route = []; this.pending = undefined; }
     else if (this.route.length) {
       const pos = this.bridge.session.getSnapshot().player.position;
-      while (this.route.length && distance(pos, this.route[0]) < 4) this.route.shift();
+      while (this.route.length && distance(pos, this.route[0]) < .1) this.route.shift();
       if (this.route.length) {
         const next = this.route[0], d = distance(pos, next);
         direction = { x: (next.x - pos.x) / d, y: (next.y - pos.y) / d };
