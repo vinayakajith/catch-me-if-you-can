@@ -46,4 +46,5 @@ export const hunterSvg = svg(`<ellipse cx="81" cy="145" rx="30" ry="9" fill="#40
 // Foreground half of the seat: the revealed dad sits behind this lip, in the bowl.
 export const toiletRimSvg = svg('<path d="M28 80A52 47 0 0 0 132 80L115 82A35 32 0 0 1 45 82Z" fill="#f7f1dd"/>');
 
-export const svgUri = (source: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;
+// Phaser's SVG loader decodes data URLs as base64, including in its Canvas fallback.
+export const svgUri = (source: string) => `data:image/svg+xml;base64,${btoa(String.fromCharCode(...new TextEncoder().encode(source)))}`;
