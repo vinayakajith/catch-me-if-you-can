@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HOUSE, HINT_MS, LocalHuntSession, ROUND_MS, canReach, clearPath, distance, findPath, isWalkable, placeTargets, peekProgress, freshHuntSeed, CASES, drawCase } from '../src/index.ts';
+import { HOUSE, HINT_MS, LocalHuntSession, ROUND_MS, canReach, clearPath, distance, findPath, isWalkable, placeTargets, peekProgress, freshHuntSeed, createFatherProfile, BALAJI } from '../src/index.ts';
 import type { Point } from '../src/types.ts';
 
 function fixture(seed = seedWith('bathroom-toilet')) {
@@ -44,12 +44,22 @@ test('six unique dads: three searches, three peeks, at least four rooms, at most
   assert.notDeepEqual(placeTargets('same').map(t => t.slotId).sort(), placeTargets(next).map(t => t.slotId).sort());
 });
 
-test('all eight case stories appear once before the deck resets, including after serialization', () => {
-  let seen: string[] = [], picked: string[] = [];
-  for (let i = 0; i < 8; i++) { const result = drawCase(JSON.parse(JSON.stringify(seen)), () => .42); seen = result.seen; picked.push(result.story.id); }
-  assert.equal(new Set(picked).size, CASES.length);
-  const next = drawCase(seen, () => 0); assert.equal(next.seen.length, 1);
-  assert.equal(drawCase(['obsolete-case'], () => 0).story.id, CASES[0].id);
+test('a renamed scientist is used in the case and catch events, with independent art metadata', () => {
+  let now = 100_000;
+  const father = createFatherProfile('  Suresh   Kumar  ', { ...BALAJI, id: 'custom', atlas: '/generated/dad.png' });
+  const session = new LocalHuntSession('Vinayak', seedWith('bathroom-toilet'), () => now, true, father);
+  father.name = 'Changed elsewhere'; father.expressions.crying = 99;
+  const state = session.getSnapshot();
+  assert.equal(state.father.name, 'Suresh Kumar');
+  assert.equal(state.father.atlas, '/generated/dad.png');
+  assert.equal(state.father.expressions.crying, BALAJI.expressions.crying);
+  assert.ok(state.case.story.includes('Suresh Kumar') && state.case.story.includes('Vinayak'));
+  assert.equal(JSON.stringify(state.case).includes('Balaji'), false);
+  const slot = HOUSE.slots.find(s => s.id === 'bathroom-toilet')!;
+  walkTo(session, slot.anchor); session.search(slot.id); now += 1000; session.tick(); session.catch(slot.id);
+  assert.equal(session.getSnapshot().activity[0].text, 'Vinayak found Suresh Kumar inside the commode.');
+  assert.equal(createFatherProfile('   ').name, 'Balaji');
+  assert.equal(createFatherProfile('x'.repeat(100)).name.length, 32);
 });
 
 test('all twenty hiding slots are reachable through physical doorways, with clear interaction positions', () => {

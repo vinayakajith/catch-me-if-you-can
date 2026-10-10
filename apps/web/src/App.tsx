@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, Check, Clock3, DoorOpen, Footprints, HelpCircle, Home, Lightbulb, Map, MousePointer2, Search, ShoppingBag, Sparkles, Trophy, Volume2, VolumeX, Waves, X } from 'lucide-react';
-import { HINT_MS, HOUSE, LocalHuntSession, drawCase, freshHuntSeed, type CaseStory, type ActionResult, type Point } from '@father-hunter/game-core';
+import { HINT_MS, HOUSE, LocalHuntSession, createFatherProfile, freshHuntSeed, type CharacterPack, type ActionResult, type Point } from '@father-hunter/game-core';
 import { Brand, Dad, HouseMap, Joystick, formatTime } from './components';
 import { GameCanvas } from './game/GameCanvas';
 import type { GameBridge } from './game/HouseScene';
@@ -8,58 +8,60 @@ import { playSound, unlockSound } from './sound';
 
 function stored(key: string, fallback: string) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
 function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* Private browsing still works. */ } }
-function caseHistory(): string[] { try { const value: unknown = JSON.parse(stored('fh-cases', '[]')); return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []; } catch { return []; } }
 interface Preferences { sound: boolean; reducedMotion: boolean }
 
 export default function App() {
-  const [round, setRound] = useState<{ name: string; seed: string; story: CaseStory } | null>(null);
+  const [round, setRound] = useState<{ name: string; seed: string; father: CharacterPack } | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(() => ({ sound: stored('fh-sound', 'true') === 'true', reducedMotion: stored('fh-motion', String(matchMedia('(prefers-reduced-motion: reduce)').matches)) === 'true' }));
-  const history = useRef(caseHistory());
   const lastSeed = useRef(stored('fh-last-seed', ''));
-  const start = (name: string, replay = false) => {
+  const start = (name: string, fatherName: string, replay = false) => {
     if (preferences.sound) unlockSound();
     save('fh-name', name);
+    const father = createFatherProfile(fatherName); save('fh-father-name', father.name);
     const fixtureSeed = import.meta.env.DEV && !replay ? new URLSearchParams(location.search).get('seed') : null;
     const seed = fixtureSeed || freshHuntSeed(lastSeed.current, `hunt-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     lastSeed.current = seed; save('fh-last-seed', seed);
-    const next = drawCase(history.current); history.current = next.seen; save('fh-cases', JSON.stringify(next.seen));
-    setRound({ name, seed, story: next.story });
+    setRound({ name, seed, father });
     window.scrollTo(0, 0);
   };
   const setPreference = (key: keyof Preferences) => setPreferences(prev => { const next = { ...prev, [key]: !prev[key] }; save(key === 'sound' ? 'fh-sound' : 'fh-motion', String(next[key])); return next; });
-  return round ? <Round key={round.seed} name={round.name} seed={round.seed} story={round.story} preferences={preferences} togglePreference={setPreference} onLeave={() => setRound(null)} onReplay={() => start(round.name, true)} /> : <Landing onStart={start} />;
+  return round ? <Round key={round.seed} name={round.name} seed={round.seed} father={round.father} preferences={preferences} togglePreference={setPreference} onLeave={() => setRound(null)} onReplay={() => start(round.name, round.father.name, true)} /> : <Landing onStart={start} />;
 }
 
-function Landing({ onStart }: { onStart: (name: string) => void }) {
+function Landing({ onStart }: { onStart: (name: string, fatherName: string) => void }) {
   const [name, setName] = useState(() => stored('fh-name', ''));
-  const submit = (event: FormEvent) => { event.preventDefault(); if (name.trim()) onStart(name.trim()); };
+  const [fatherName, setFatherName] = useState(() => stored('fh-father-name', 'Balaji'));
+  const father = createFatherProfile(fatherName);
+  const submit = (event: FormEvent) => { event.preventDefault(); if (name.trim() && fatherName.trim()) onStart(name.trim(), father.name); };
   return <div className="landing">
     <header className="site-header"><Brand /><nav><a href="#how-to-play">How to play <ArrowDown size={14} /></a><span className="pill"><span className="live-dot" /> A VERY UNSERIOUS GAME</span></nav></header>
     <main>
       <section className="hero">
         <div className="hero-copy">
-          <div className="eyebrow"><span className="tiny-star">✳</span> A FAMILY-SIZED MYSTERY</div>
-          <h1>Dad’s gone<br />missing.<br /><em>Again.</em><span className="headline-star">✴</span></h1>
-          <p className="hero-description">One suspicious house. Six hidden Balajis.<br className="desktop-break" /> Find them before the tea gets cold.</p>
+          <div className="eyebrow"><span className="tiny-star">✳</span> A GOVERNMENT-SIZED SCREW-UP</div>
+          <h1>One dad.<br />Six copies.<br /><em>Oh, shit.</em><span className="headline-star">✴</span></h1>
+          <p className="hero-description">Dad built a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the detective sent to bag all six.</p>
           <form className="start-form" onSubmit={submit}>
+            <label htmlFor="father-name">WHO’S THE MAD SCIENTIST?</label>
+            <div className="father-field"><span>Dr.</span><input id="father-name" name="fatherName" autoComplete="off" maxLength={32} value={fatherName} onChange={e => setFatherName(e.target.value)} required /></div>
             <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, DETECTIVE?</label>
             <div className="start-fields"><input id="player-name" name="name" autoComplete="given-name" placeholder="Your name" maxLength={24} value={name} onChange={e => setName(e.target.value)} required /><button className="button primary" type="submit">Let’s find dad <ArrowRight size={20} /></button></div>
             <div className="start-note"><Check size={14} /> No signup. No gaming skills. Just suspicious instincts.</div>
           </form>
           <div className="hero-stats"><span><Home size={17} /><b>5</b> rooms</span><span><Search size={17} /><b>6</b> dads</span><span><Clock3 size={17} /><b>10</b> minutes</span></div>
         </div>
-        <div className="hero-art" aria-label="Missing poster for Balaji">
-          <div className="scribble scribble-top">last seen “just here” <span>↴</span></div>
+        <div className="hero-art" aria-label={`Wanted poster for ${father.name}`}>
+          <div className="scribble scribble-top">peer review: absolutely not <span>↴</span></div>
           <div className="poster-back" />
           <article className="wanted-poster">
-            <div className="tape" /><div className="poster-topline"><span>FAMILY NOTICE BOARD</span><span>CASE No. 001</span></div>
-            <div className="wanted-title">HAVE YOU<br />SEEN THIS DAD?</div>
-            <div className="portrait-stage"><div className="portrait-grid" /><Dad /><span className="portrait-bubble">“I’m literally<br />not hiding.”</span></div>
-            <div className="poster-name">BALAJI<span>Age: old enough to know better</span></div>
-            <p>Distinctive moustache. Questionable alibis.<br />May be hiding in your commode.</p>
-            <div className="poster-stamp">6 SIGHTINGS · 0 EXPLANATIONS</div>
+            <div className="tape" /><div className="poster-topline"><span>BUREAU OF TEMPORAL NONSENSE</span><span>CASE No. 001</span></div>
+            <div className="wanted-title">WANTED FOR<br />ILLEGAL SCIENCE</div>
+            <div className="portrait-stage"><div className="portrait-grid" /><Dad character={father} /><span className="portrait-bubble">“I see no flaws<br />in my work.”</span></div>
+            <div className="poster-name">{father.name}<span>Dr. is a self-awarded title.</span></div>
+            <p>Six copies. Absolutely no impulse control.<br />May be hiding in your commode.</p>
+            <div className="poster-stamp">6 COPIES · 0 PERMITS</div>
           </article>
-          <div className="little-label"><span>☕</span><div>REWARD IF FOUND<strong>One lukewarm cup of tea.</strong></div></div>
+          <div className="little-label"><span>✳</span><div>GOVERNMENT EQUIPMENT<strong>One sack. Budget cuts.</strong></div></div>
           <span className="art-star star-one">✳</span><span className="art-star star-two">✧</span>
         </div>
       </section>
@@ -75,9 +77,10 @@ function Landing({ onStart }: { onStart: (name: string) => void }) {
   </div>;
 }
 
-function Round({ name, seed, story, preferences, togglePreference, onLeave, onReplay }: { name: string; seed: string; story: CaseStory; preferences: Preferences; togglePreference: (key: keyof Preferences) => void; onLeave: () => void; onReplay: () => void }) {
-  const [session] = useState(() => new LocalHuntSession(name, seed, Date.now, false, story.id));
+function Round({ name, seed, father, preferences, togglePreference, onLeave, onReplay }: { name: string; seed: string; father: CharacterPack; preferences: Preferences; togglePreference: (key: keyof Preferences) => void; onLeave: () => void; onReplay: () => void }) {
+  const [session] = useState(() => new LocalHuntSession(name, seed, Date.now, false, father));
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  const story = state.case;
   const [ready, setReady] = useState(false), [error, setError] = useState('');
   const [accepted, setAccepted] = useState(false), [bagged, setBagged] = useState(0);
   const [toast, setToast] = useState(''), [mapOpen, setMapOpen] = useState(false), [leaving, setLeaving] = useState(false), [help, setHelp] = useState(false);
@@ -111,7 +114,7 @@ function Round({ name, seed, story, preferences, togglePreference, onLeave, onRe
     if (accepted && !resultsVisible && !leaving && !help && !mapOpen) return;
     const previous = document.activeElement as HTMLElement | null;
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-    dialog?.querySelector<HTMLButtonElement>('button')?.focus();
+    dialog?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     const trap = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !ended) { setHelp(false); setLeaving(false); setMapOpen(false); }
       if (event.key !== 'Tab' || !dialog) return;
@@ -137,11 +140,11 @@ function Round({ name, seed, story, preferences, togglePreference, onLeave, onRe
       <div className="hunt-topline"><div><span className="eyebrow">OPERATION: FIND YOUR FATHER</span><h1>He’s in here. <em>Somewhere.</em></h1></div><p>Check the obvious. Then check the embarrassing.</p></div>
       <div className="hunt-layout">
         <section className="play-area" aria-label="Hunt">
-          <div className="hud"><div className={`hud-stat timer ${state.endsAt - state.now < 60000 ? 'urgent' : ''}`}><Clock3 /><span><small>TIME LEFT</small><strong>{formatTime(state.endsAt - state.now)}</strong></span></div><div className="hud-stat"><Search /><span><small>STILL HIDING</small><strong>{remaining}<i> Balajis</i></strong></span></div><div className="hud-stat your-score"><ShoppingBag /><span><small>BAGGED</small><strong>{bagged}<i> / 6</i></strong></span></div><button className="map-toggle icon-button" aria-label="Open house map" onClick={() => setMapOpen(true)}><Map size={21} /></button></div>
+          <div className="hud"><div className={`hud-stat timer ${state.endsAt - state.now < 60000 ? 'urgent' : ''}`}><Clock3 /><span><small>TIME LEFT</small><strong>{formatTime(state.endsAt - state.now)}</strong></span></div><div className="hud-stat"><Search /><span><small>STILL HIDING</small><strong>{remaining}<i> copies</i></strong></span></div><div className="hud-stat your-score"><ShoppingBag /><span><small>BAGGED</small><strong>{bagged}<i> / 6</i></strong></span></div><button className="map-toggle icon-button" aria-label="Open house map" onClick={() => setMapOpen(true)}><Map size={21} /></button></div>
           <div className="game-frame">
             <GameCanvas bridge={bridge} />
             <div className="room-chip"><Home size={15} /><span>{room.name}</span></div>
-            {!ready && <div className="game-loading"><Dad expression={1} /><h2>{error ? 'A little technical hiccup.' : 'Checking under the furniture…'}</h2><p>{error || 'Balaji is finding some deeply questionable hiding spots.'}</p>{error && <button className="button primary" onClick={() => location.reload()}>Try again</button>}</div>}
+            {!ready && <div className="game-loading"><Dad character={father} expression={1} /><h2>{error ? 'A little technical hiccup.' : 'Checking under the furniture…'}</h2><p>{error || `${father.name} is finding some deeply questionable hiding spots.`}</p>{error && <button className="button primary" onClick={() => location.reload()}>Try again</button>}</div>}
             {ready && accepted && !coachDismissed && !ended && <div className="coach"><Sparkles size={17} /><p>{coach}</p><button className="icon-button" aria-label="Dismiss guidance" onClick={() => setCoachDismissed(true)}><X size={15} /></button></div>}
             {toast && !ended && <div className="toast" role="status">{toast}</div>}
             {ready && accepted && !ended && <><Joystick onMove={point => { bridge.movement = point; }} /><button className="inspect-button" aria-label="Check nearby furniture" onClick={() => bridge.inspect?.()}><Search size={22} /><span>CHECK</span></button></>}
@@ -150,25 +153,25 @@ function Round({ name, seed, story, preferences, togglePreference, onLeave, onRe
         </section>
         {mapOpen && <button className="map-backdrop" aria-label="Close map" onClick={() => setMapOpen(false)} />}
         <aside className={`case-file ${mapOpen ? 'is-open' : ''}`} role={mapOpen && !ended ? 'dialog' : undefined} aria-modal={mapOpen && !ended ? true : undefined} aria-labelledby="case-file-title"><div className="case-file-heading"><span className="eyebrow" id="case-file-title">YOUR CASE FILE</span><button className="map-close icon-button" aria-label="Close map" onClick={() => setMapOpen(false)}><X size={19} /></button></div>
-          <div className="suspect"><div className="suspect-photo"><Dad expression={1} /></div><div><small>PERSON OF INTEREST</small><h2>Balaji</h2><p>One dad. Many bad decisions.</p></div></div>
+          <div className="suspect"><div className="suspect-photo"><Dad character={father} expression={1} /></div><div><small>PERSON OF INTEREST</small><h2>{father.name}</h2><p>Six copies. Zero impulse control.</p></div></div>
           <div className="dad-tally" aria-label={`${bagged} of 6 fathers bagged`}>{Array.from({ length: 6 }, (_, i) => <span key={i} className={i < bagged ? 'caught' : ''}>{i < bagged ? <Check size={15} /> : <span className="mini-moustache">⌁</span>}</span>)}</div>
           <div className="map-heading"><span>THE HOUSE</span><small>Tap a room to walk there</small></div><HouseMap snapshot={state} navigate={navigate} />
           <div className="map-key"><span className="player-dot" /> You are here <span>·</span> {room.name}</div>
-          <div className="bag-summary" aria-live="polite"><ShoppingBag size={27} /><div><strong>{bagged} / 6 in the sack</strong><span>{bagged === 0 ? 'Room for six. Somehow.' : bagged === 6 ? 'Return the whole family pack.' : 'Getting heavier. Still portable.'}</span></div></div>
+          <div className="bag-summary" aria-live="polite"><ShoppingBag size={27} /><div><strong>{bagged} / 6 in the sack</strong><span>{bagged === 0 ? 'Room for six. Somehow.' : bagged === 6 ? 'Deliver to temporal containment.' : 'Getting heavier. Still portable.'}</span></div></div>
           <button className="hint-button" disabled={state.now - state.lastCatchAt < HINT_MS || ended} onClick={() => feedback(session.hint())}><Lightbulb size={17} /> A tiny hint?<ArrowRight size={16} /></button><p className="hint-note">Room hints unlock after a minute without a catch.</p>
         </aside>
       </div>
     </main>
     {!accepted && <div className="modal-backdrop case-backdrop"><section className="case-brief" role="dialog" aria-modal="true" aria-labelledby="brief-title" aria-describedby="brief-story">
       <div className="brief-top"><span className="eyebrow">DEPARTMENT OF DAD RETRIEVAL</span><span className="brief-number">06 MISSING</span></div>
-      <div className="brief-art" aria-hidden="true"><div className="detective-portrait" /><Dad expression={2} /><Dad expression={1} /><span className="brief-stamp">{story.stamp}</span></div>
+      <div className="brief-art" aria-hidden="true"><div className="detective-portrait" /><Dad character={father} expression={2} /><Dad character={father} expression={1} /><span className="brief-stamp">{story.stamp}</span></div>
       <span className="eyebrow brief-assignment">YOUR NEXT CASE, DETECTIVE {name.toUpperCase()}</span>
       <h2 id="brief-title">{story.title}</h2><p id="brief-story">{story.story}</p>
       <div className="brief-mission"><ShoppingBag size={22} /><span><strong>Find all 6. Put them in the sack.</strong><small>Tap to walk. Tap things to check. Tap a dad to bag him.</small></span></div>
       {error ? <><p className="brief-error" role="alert">{error}</p><button className="button primary" onClick={() => location.reload()}>Reload the house</button></> : <button className="button primary" disabled={!ready} onClick={() => { unlockSound(); setAccepted(true); }}>{ready ? 'Take the case' : 'Preparing the house…'} <ArrowRight size={19} /></button>}
       <p className="brief-timer">Your 10 minutes start when you take the case.</p><button className="text-button" onClick={onLeave}>Back to the notice board</button>
     </section></div>}
-    {resultsVisible && <div className="modal-backdrop"><section className="result-card" role="dialog" aria-modal="true" aria-labelledby="result-title"><span className="eyebrow">{state.finishReason === 'complete' ? 'CASE CLOSED. SACK FULL.' : 'TEA BREAK. INVESTIGATION OVER.'}</span><Dad expression={state.finishReason === 'complete' ? 4 : 5} /><h2 id="result-title">{state.finishReason === 'complete' ? 'Six dads. One sack.' : state.player.score >= 6 ? 'Dad’s worst nightmare.' : 'A suspicious beginning.'}</h2><p>{state.finishReason === 'complete' ? 'Amma signed for one dad. You are returning a family pack.' : `${remaining} Balajis escaped questioning. They would like to thank the furniture.`}</p><div className="result-stats"><div><strong>{state.player.score}<small>/ 6</small></strong><span>BALAJIS BAGGED</span></div><div><strong>{formatTime(Math.min(state.now, state.endsAt) - state.startedAt)}</strong><span>TIME SPENT SNOOPING</span></div></div><div className="result-player"><Trophy size={19} /><strong>{state.player.name}</strong><span>{state.player.score} points</span></div><button className="button primary" onClick={onReplay}>Take another case <ArrowRight size={19} /></button><button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> Back to the notice board</button></section></div>}
+    {resultsVisible && <div className="modal-backdrop"><section className="result-card" role="dialog" aria-modal="true" aria-labelledby="result-title"><span className="eyebrow">{state.finishReason === 'complete' ? 'CASE CLOSED. SACK FULL.' : 'CONTAINMENT WINDOW CLOSED.'}</span><Dad character={father} expression={state.finishReason === 'complete' ? 4 : 5} /><h2 id="result-title">{state.finishReason === 'complete' ? 'Six dads. One sack.' : state.player.score >= 6 ? 'Dad’s worst nightmare.' : 'A suspicious beginning.'}</h2><p>{state.finishReason === 'complete' ? 'Six unstable idiots. One very unhappy sack. The government calls that a promotion.' : `${remaining} copies of ${father.name} remain at large. The government would like its sack back.`}</p><div className="result-stats"><div><strong>{state.player.score}<small>/ 6</small></strong><span>COPIES BAGGED</span></div><div><strong>{formatTime(Math.min(state.now, state.endsAt) - state.startedAt)}</strong><span>TIME SPENT SNOOPING</span></div></div><div className="result-player"><Trophy size={19} /><strong>{state.player.name}</strong><span>{state.player.score} points</span></div><button className="button primary" onClick={onReplay}>Take another case <ArrowRight size={19} /></button><button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> Back to the notice board</button></section></div>}
     {leaving && !ended && <div className="modal-backdrop"><section className="small-modal" role="dialog" aria-modal="true" aria-labelledby="leave-title"><h2 id="leave-title">Let dad get away?</h2><p>This hunt will end. You can always start another investigation.</p><button className="button primary" onClick={() => setLeaving(false)}>Keep looking</button><button className="text-button" onClick={onLeave}>Leave this hunt</button></section></div>}
     {help && !ended && <div className="modal-backdrop"><section className="small-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title"><button className="icon-button modal-close" aria-label="Close help" onClick={() => setHelp(false)}><X /></button><span className="eyebrow">DETECTIVE TRAINING, AGAIN</span><h2 id="help-title">Just tap. Be curious.</h2><p><Footprints /> Tap the floor or a room on the map to walk there.</p><p><DoorOpen /> Tap furniture to check it. Open lids. Investigate weird corners.</p><p><MousePointer2 /> See a face? Tap it. Your detective walks over and bags him, even if he ducks away.</p><div className="help-note">The timer keeps ticking while you investigate. Keyboard arrows, WASD, and the joystick work too.</div><button className="button primary" onClick={() => setHelp(false)}>Got it. Where’s dad? <ArrowRight size={18} /></button></section></div>}
   </div>;

@@ -21,5 +21,5 @@ export function GameCanvas({ bridge }: { bridge: GameBridge }) {
     }).catch(() => bridge.failed('The game could not start. Please reload and try again.'));
     return () => { cancelled = true; observer?.disconnect(); game?.destroy(true); };
   }, [bridge]);
-  return <div ref={parent} className="game-canvas" role="application" aria-label="Balaji’s house. Tap the floor to walk, tap furniture to search, and tap a visible Balaji to catch him." />;
+  return <div ref={parent} className="game-canvas" role="application" aria-label={`${bridge.session.getSnapshot().father.name}’s house. Tap the floor to walk, tap furniture to search, and tap a visible dad to catch him.`} />;
 }

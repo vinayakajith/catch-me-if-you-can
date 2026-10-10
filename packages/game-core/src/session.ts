@@ -1,8 +1,8 @@
 import { HOUSE, canReach, isWalkable, roomAt } from './house.ts';
 import { random, shuffled } from './random.ts';
-import { CASES } from './cases.ts';
+import { createFatherProfile, createTimeMachineCase } from './cases.ts';
 import { isDadExposed } from './peeking.ts';
-import type { ActionResult, Activity, HuntSession, HuntSnapshot, Point, Target } from './types.ts';
+import type { ActionResult, Activity, CharacterPack, HuntSession, HuntSnapshot, Point, Target } from './types.ts';
 
 export const ROUND_MS = 10 * 60 * 1000;
 export const EXPIRY_MS = 60 * 60 * 1000;
@@ -39,11 +39,13 @@ export class LocalHuntSession implements HuntSession {
   private lastSecond = -1;
   private lastHintAt = -Infinity;
   private clock: () => number;
-  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true, caseId = CASES[0].id) {
+  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true, father: CharacterPack = createFatherProfile('Balaji')) {
     this.clock = clock;
     const now = clock();
-    this.state = { id: `solo-${seed}`, seed, case: CASES.find(c => c.id === caseId) ?? CASES[0], status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
-      player: { id: 'hunter-1', name: name.trim().slice(0, 24) || 'Detective', position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
+    const playerName = name.trim().slice(0, 24) || 'Detective';
+    const profile = createFatherProfile(father.name, father);
+    this.state = { id: `solo-${seed}`, seed, father: profile, case: createTimeMachineCase(profile.name, playerName), status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
+      player: { id: 'hunter-1', name: playerName, position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
       targets: placeTargets(seed), opened: [], spotted: [], search: null, activity: [] };
   }
   getSnapshot = () => this.state;
@@ -76,7 +78,7 @@ export class LocalHuntSession implements HuntSession {
       if (canReach(this.state.player.position, slot)) {
         this.state = { ...this.state, opened: [...this.state.opened, slot.id] };
         const occupied = this.state.targets.some(t => t.slotId === slot.id && !t.claimedBy);
-        this.addActivity(occupied ? 'Balaji uncovered.' : 'Checked. Empty.', 'search', slot.id);
+        this.addActivity(occupied ? `${this.state.father.name} uncovered.` : 'Checked. Empty.', 'search', slot.id);
       }
       changed = true;
     }
@@ -127,14 +129,14 @@ export class LocalHuntSession implements HuntSession {
     if (!slot || !canReach(this.state.player.position, slot)) return this.error('Get a little closer. No catching through walls!');
     const target = this.state.targets.find(t => t.slotId === slotId);
     if (!target) return this.error('Suspicious, but not your father.');
-    if (target.claimedBy) return this.error('Already caught. One Balaji, one point.');
-    if (!isDadExposed(this.state, slot, this.clock())) return this.error('Check it first to uncover Balaji.');
+    if (target.claimedBy) return this.error('Already caught. One dad, one point.');
+    if (!isDadExposed(this.state, slot, this.clock())) return this.error(`Check it first to uncover ${this.state.father.name}.`);
     const now = this.clock();
     this.state = { ...this.state, lastCatchAt: now,
       targets: this.state.targets.map(t => t.id === target.id ? { ...t, claimedBy: this.state.player.id, claimedAt: now } : t),
       player: { ...this.state.player, score: this.state.player.score + 1 } };
     const room = HOUSE.rooms.find(r => r.id === slot.roomId)!;
-    this.addActivity(`${this.state.player.name} found Balaji ${slot.kind === 'toilet' ? 'inside the commode' : `by the ${slot.name} in the ${room.name.toLowerCase()}`}.`, 'catch', slotId);
+    this.addActivity(`${this.state.player.name} found ${this.state.father.name} ${slot.kind === 'toilet' ? 'inside the commode' : `by the ${slot.name} in the ${room.name.toLowerCase()}`}.`, 'catch', slotId);
     if (this.state.targets.every(t => t.claimedBy)) this.finish('complete');
     this.emit();
     return { ok: true, message: '', kind: 'catch', slotId };

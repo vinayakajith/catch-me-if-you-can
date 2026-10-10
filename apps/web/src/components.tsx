@@ -1,12 +1,14 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { HOUSE, type HuntSnapshot, type Point, type RoomId } from '@father-hunter/game-core';
+import { BALAJI, HOUSE, type CharacterPack, type Expression, type HuntSnapshot, type Point, type RoomId } from '@father-hunter/game-core';
 
 export function Brand({ onClick }: { onClick?: () => void }) {
   return <button type="button" className="brand" onClick={onClick} aria-label="Father Hunter home"><img src="/favicon.svg" alt="" width="39" height="39" /><span>father<span className="brand-light">hunter</span><span className="brand-dot">.</span></span></button>;
 }
 
-export function Dad({ expression = 0, className = '' }: { expression?: number; className?: string }) {
-  return <div role="img" aria-label={['Suspicious Balaji', 'Balaji hiding', 'Surprised Balaji', 'Caught Balaji', 'Dramatically crying Balaji', 'Defeated Balaji'][expression]} className={`dad-portrait ${className}`} style={{ backgroundPosition: `${expression % 3 * 50}% ${Math.floor(expression / 3) * 100}%` }} />;
+const expressionOrder: Expression[] = ['normal', 'hiding', 'surprised', 'caught', 'crying', 'defeated'];
+export function Dad({ expression = 0, className = '', character = BALAJI }: { expression?: number; className?: string; character?: CharacterPack }) {
+  const mood = expressionOrder[expression] ?? 'normal', frame = character.expressions[mood];
+  return <div role="img" aria-label={`${character.name}, ${mood}`} className={`dad-portrait ${className}`} style={{ backgroundImage: `url("${character.atlas}")`, backgroundSize: `${character.columns * 100}% ${character.rows * 100}%`, backgroundPosition: `${frame % character.columns * 100 / Math.max(1, character.columns - 1)}% ${Math.floor(frame / character.columns) * 100 / Math.max(1, character.rows - 1)}%` }} />;
 }
 
 const entrances: Record<RoomId, Point> = { living: { x: 610, y: 315 }, kitchen: { x: 885, y: 315 }, bedroom: { x: 270, y: 682 }, bathroom: { x: 760, y: 682 }, storeroom: { x: 1240, y: 682 }, hall: HOUSE.spawn };

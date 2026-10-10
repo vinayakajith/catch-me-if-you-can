@@ -14,10 +14,11 @@ export interface HouseDefinition { id: string; width: number; height: number; ro
 export type Expression = 'normal' | 'hiding' | 'surprised' | 'caught' | 'crying' | 'defeated';
 export interface CharacterPack { id: string; name: string; atlas: string; columns: number; rows: number; expressions: Record<Expression, number> }
 export interface Target { id: string; slotId: string; claimedBy: string | null; claimedAt: number | null }
-export interface CaseStory { id: string; title: string; story: string; stamp: string }
+export interface CaseBeat { id: 'experiment' | 'chaos' | 'dispatch'; kicker: string; title: string; text: string }
+export interface CaseStory { id: string; title: string; story: string; stamp: string; beats: CaseBeat[] }
 export interface Activity { id: number; text: string; kind: 'catch' | 'search' | 'hint' | 'welcome'; at: number; slotId?: string }
 export interface HuntSnapshot {
-  id: string; seed: string; case: CaseStory; status: 'ready' | 'playing' | 'finished' | 'expired';
+  id: string; seed: string; father: CharacterPack; case: CaseStory; status: 'ready' | 'playing' | 'finished' | 'expired';
   finishReason: 'complete' | 'timeout' | 'expired' | null;
   startedAt: number; endsAt: number; expiresAt: number; now: number; lastCatchAt: number;
   player: { id: string; name: string; position: Point; roomId: RoomId; score: number };

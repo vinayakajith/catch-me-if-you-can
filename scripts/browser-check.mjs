@@ -89,7 +89,7 @@ async function finishHunt(page, mobile = false) {
     } else {
       // Wait for a real visible peek, then use an actual mouse/touch event on the canvas.
       await page.waitForFunction(id => {
-        const dad = window.__huntTest.scene.children.list.find(o => o.texture?.key === 'balaji' && o.x === window.__huntTest.slots.find(s => s.id === id).target.x && o.visible);
+        const dad = window.__huntTest.scene.children.list.find(o => o.texture?.key === 'father' && o.x === window.__huntTest.slots.find(s => s.id === id).target.x && o.visible);
         return dad && dad.alpha > .95;
       }, slot.id);
     }
@@ -108,7 +108,7 @@ async function finishHunt(page, mobile = false) {
   const after = await page.evaluate(() => window.__huntTest.session.getSnapshot());
   assert.equal(after.status, 'ready'); assert.equal(after.player.score, 0);
   assert.deepEqual(after.opened, []); assert.deepEqual(after.spotted, []);
-  assert.notEqual(after.seed, before.seed); assert.notEqual(after.case.id, before.case.id);
+  assert.notEqual(after.seed, before.seed); assert.equal(after.case.id, before.case.id); assert.deepEqual(after.father, before.father);
   assert.notDeepEqual(after.targets.map(t => t.slotId).sort(), before.targets.map(t => t.slotId).sort());
   await page.getByRole('button', { name: 'Take the case', exact: true }).click();
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
