@@ -33,6 +33,7 @@ export interface HuntSnapshot {
   activity: Activity[];
   connection?: 'online' | 'reconnecting' | 'replaced';
   connectionMessage?: string;
+  pendingActions?: number;
 }
 export interface ActionResult { ok: boolean; message: string; kind: 'catch' | 'search' | 'spot' | 'hint' | 'error'; slotId?: string; targetId?: string }
 export interface HuntSession {

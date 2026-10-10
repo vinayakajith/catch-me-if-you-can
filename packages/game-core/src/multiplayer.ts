@@ -32,7 +32,7 @@ export function balancedTargets(seed: string, mix: PlacementMix, previous = ''):
 
 export type HuntCommand = { seq: number } & (
   { kind: 'move'; direction: Point; deltaMs: number } |
-  { kind: 'search' | 'spot' | 'catch'; id: string } | { kind: 'hint' }
+  { kind: 'search' | 'spot' | 'catch'; id: string; seenAt?: number } | { kind: 'hint' }
 );
 export interface GameRoomInfo {
   id: string; fatherName: string; createdAt: number; expiresAt: number; resultsExpireAt: number;

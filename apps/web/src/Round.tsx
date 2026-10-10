@@ -47,7 +47,7 @@ export function Round({ name, seed, father, preferences, togglePreference, onLea
   useEffect(() => { if (state.player.score > 0) { const timer = setTimeout(() => setCoachDismissed(true), 6500); return () => clearTimeout(timer); } }, [state.player.score]);
   const room = HOUSE.rooms.find(r => r.id === state.player.roomId)!;
   const ended = state.status === 'finished' || state.status === 'expired';
-  const resultsVisible = ended && bagged >= state.player.score;
+  const resultsVisible = ended && bagged >= state.player.score && !state.pendingActions;
   bridge.inputEnabled = ready && accepted && state.connection !== 'reconnecting' && state.connection !== 'replaced' && !ended && !leaving && !help && !mapOpen;
   useEffect(() => {
     if (accepted && !resultsVisible && !leaving && !help && !mapOpen) return;
@@ -77,7 +77,7 @@ export function Round({ name, seed, father, preferences, togglePreference, onLea
       <button className="icon-button leave-button" aria-label="Leave hunt" onClick={() => setLeaving(true)}><X size={19} /></button>
     </div></header>
     <main className="hunt-main" inert={!accepted}>
-      <div className="hunt-topline"><div><span className="eyebrow">OPERATION: FIND YOUR FATHER</span><h1>He’s in here. <em>Somewhere.</em></h1></div><p>Check the obvious. Then check the embarrassing.</p></div>
+      <div className="hunt-topline"><div><span className="eyebrow">OPERATION: FIND {father.name.toUpperCase()}</span><h1>He’s in here. <em>Somewhere.</em></h1></div><p>Check the obvious. Then check the embarrassing.</p></div>
       <div className="hunt-layout">
         <section className="play-area" aria-label="Hunt">
           <div className="hud"><div className={`hud-stat timer ${state.endsAt - state.now < 10000 ? 'urgent critical' : state.endsAt - state.now < 30000 ? 'urgent' : ''}`}><Clock3 /><span><small>TIME LEFT</small><strong>{formatTime(state.endsAt - state.now)}</strong></span></div><div className="hud-stat your-score"><ShoppingBag /><span><small>BAGGED</small><strong>{bagged}</strong></span></div><button className="map-toggle icon-button" aria-label="Open house map" onClick={() => setMapOpen(true)}><Map size={21} /></button></div>

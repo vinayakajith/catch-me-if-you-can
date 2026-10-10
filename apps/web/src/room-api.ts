@@ -30,6 +30,7 @@ export class RoomClient {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private emit() { this.listeners.forEach(fn => fn()); }
   accept(view: RoomView) {
+    if (this.closed) return;
     const old = this.state.view;
     if (old && (view.revision < old.revision || view.revision === old.revision && view.serverNow < old.serverNow)) return;
     this.state = { view, error: '' }; this.emit();

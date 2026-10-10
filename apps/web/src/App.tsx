@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, Check, Clock3, DoorOpen, Footprints, HelpCircle, Home, Lightbulb, Map, MousePointer2, Search, ShoppingBag, Sparkles, Trophy, Upload, Volume2, VolumeX, Waves, X } from 'lucide-react';
-import { HINT_MS, HOUSE, LocalHuntSession, createFatherProfile, freshHuntSeed, type CharacterPack, type ActionResult, type Point } from '@father-hunter/game-core';
-import { Brand, Dad, HouseMap, Joystick, formatTime } from './components';
-import { GameCanvas } from './game/GameCanvas';
-import { CaseIntro } from './CaseIntro';
-import type { GameBridge } from './game/HouseScene';
-import { playSound, unlockSound } from './sound';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowDown, ArrowRight, Check, Clock3, DoorOpen, Footprints, Home, MousePointer2, Search, Upload } from 'lucide-react';
+import { createFatherProfile, freshHuntSeed, type CharacterPack } from '@father-hunter/game-core';
+import { Brand, Dad } from './components';
+import { unlockSound } from './sound';
 import { CharacterCreator } from './CharacterCreator';
-import { CharacterApiError, getCharacterJob, pendingCharacterUpload, recoverCharacterUpload, rememberCharacterJob, savedCharacterJob } from './character-api';
-
-function stored(key: string, fallback: string) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
-function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* Private browsing still works. */ } }
+import { CharacterApiError, getCharacterJob, pendingCharacterUpload, recoverCharacterUpload, rememberCharacterJob, savedCharacterJob, uploadKey } from './character-api';
 import { Round, type Preferences } from './Round';
 import { RoomPage } from './RoomPage';
 import { createRoom } from './room-api';
-import { uploadKey } from './character-api';
+import { personalCopy } from './personal-copy';
+
+function stored(key: string, fallback: string) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
+function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* Private browsing still works. */ } }
 
 export default function App() {
   const [path, setPath] = useState(location.pathname);
@@ -77,7 +74,7 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
           <p className="hero-description">{father.name} put witchcraft in a time machine. It made him everyone’s problem.<br className="desktop-break" /> You’re the agent sent to clean up the shitshow.</p>
           <form className="start-form" onSubmit={submit}>
             <div className="personal-dad"><button type="button" className="photo-start" onClick={() => setCreating(true)}>{selected ? <Dad character={father} expression={1} /> : <Upload size={22} />}<span><strong>{selected ? `${father.name} is ready` : resume ? `Continue making ${father.name}` : `Use ${father.name}’s photo`}</strong><small>{selected ? 'Six faces. Extremely questionable intentions.' : resume ? 'His progress is saved. Pick up where you left off.' : 'Turn him into the actual troublemaker.'}</small></span><ArrowRight size={17} /></button>{selected && <button type="button" className="sample-switch" onClick={() => { setSelected(null); setResume(false); rememberCharacterJob(null); setPhotoError(''); }}>Use sample Balaji instead</button>}</div>
-            {photoError && <p role="alert" className="photo-warning">{photoError}</p>}
+            {photoError && <p role="alert" className="photo-warning">{personalCopy(photoError, father.name)}</p>}
             <label htmlFor="father-name">WHO’S THE WITCH-SCIENTIST?</label>
             <div className="father-field"><span>Dr.</span><input id="father-name" name="fatherName" autoComplete="off" maxLength={32} value={fatherName} onChange={e => setFatherName(e.target.value)} required /></div>
             <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, AGENT?</label>
@@ -109,6 +106,6 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
         </div>
       </section>
     </main>
-    <footer className="site-footer"><Brand /><p>Made for laughs. And mildly embarrassed fathers.</p><span>FIVE AGENTS. ONE BAD IDEA.</span></footer>
+    <footer className="site-footer"><Brand /><p>Made for laughs. And a mildly embarrassed {father.name}.</p><span>FIVE AGENTS. ONE BAD IDEA.</span></footer>
   </div>;
 }

@@ -31,7 +31,7 @@ export function RoomPage({ id, preferences, togglePreference, onHome }: { id: st
   };
   if (run && view?.room.status !== 'closed') return <Round key={run.viewKey} name={view!.me!.name} seed={run.getSnapshot().seed} father={view!.father!} session={run} resumed={run.resumed} room={view!} preferences={preferences} togglePreference={togglePreference} onLeave={() => { setRun(null); }} onReplay={() => setRun(new NetworkHuntSession(client))} />;
   return <div className="room-page"><header className="site-header"><Brand onClick={onHome} /><button className="text-button" onClick={onHome}><ArrowLeft size={16} /> Home</button></header>
-    {!view ? <main className="room-loading"><span className="eyebrow">BUREAU OF TEMPORAL NONSENSE</span><h1>Finding your case…</h1><p role="status">{connectionError || 'Checking whose father escaped.'}</p></main> :
+    {!view ? <main className="room-loading"><span className="eyebrow">BUREAU OF TEMPORAL NONSENSE</span><h1>Finding your case…</h1><p role="status">{connectionError || 'Checking the invite.'}</p></main> :
     <main className="room-lobby">
       <div className="room-brief"><span className="eyebrow">BUREAU OF TEMPORAL NONSENSE · GROUP CASE</span><h1>The {view.room.fatherName}<br /><em>incident.</em></h1>
         {view.father && <div className="room-suspect"><Dad character={view.father} expression={view.father.expressions.laugh} /><span>ONE SCIENTIST.<br />ABSOLUTELY NO RESTRAINT.</span></div>}

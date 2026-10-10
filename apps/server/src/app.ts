@@ -27,7 +27,8 @@ export async function buildApp(options: { directory: string; provider: ImageProv
   await jobs.initialize();
   const rooms = new Rooms(new SqliteRoomStore(options.directory), new DiskAssetStore(options.directory), jobs, options.clock);
   await rooms.cleanup();
-  const cleanup = setInterval(() => { Promise.all([jobs.cleanup(), rooms.cleanup()]).catch(() => console.error('Asset cleanup will retry.')); }, 60_000); cleanup.unref();
+  let cleanupWork: Promise<unknown> = Promise.resolve();
+  const cleanup = setInterval(() => { cleanupWork = cleanupWork.then(() => Promise.all([jobs.cleanup(), rooms.cleanup()])).catch(() => console.error('Asset cleanup will retry.')); }, 60_000); cleanup.unref();
   app.addHook('onRequest', async (request, reply) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       if (request.headers['x-fh-request'] !== '1') throw new JobError(403, 'Please use Father Hunter to create your Dad.');
@@ -90,6 +91,6 @@ export async function buildApp(options: { directory: string; provider: ImageProv
     if (detail.statusCode === 400) return reply.code(400).send({ message: 'That request was not valid. Please retry from the game.' });
     return reply.code(500).send({ message: request.url.startsWith('/api/rooms') ? 'The room could not update. Reconnect to continue.' : 'Dad’s paperwork got stuck. Your completed faces are saved; try again.' });
   });
-  app.addHook('onClose', async () => { clearInterval(cleanup); rooms.close(); await jobs.close(); });
+  app.addHook('onClose', async () => { clearInterval(cleanup); await cleanupWork; await rooms.close(); await jobs.close(); });
   return { app, jobs, rooms };
 }

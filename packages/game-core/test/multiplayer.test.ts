@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { balancedTargets, placementMix, placeTargets, targetSignature, LocalHuntSession, ROUND_MS, HOUSE, type HuntCheckpoint } from '../src/index.ts';
+import { balancedTargets, placementMix, placeTargets, targetSignature, LocalHuntSession, ROUND_MS, HOUSE, isDadExposed, type HuntCheckpoint } from '../src/index.ts';
 
 test('balanced retries retain cast size and exposure mix, cover every room, and reshuffle', () => {
   for (let i = 0; i < 500; i++) {
@@ -13,6 +13,25 @@ test('balanced retries retain cast size and exposure mix, cover every room, and 
     assert.ok(slots.some(s => s.kind === 'statue')); assert.equal(next.filter(t => t.kind === 'broom').length, 1);
     assert.deepEqual(first, balancedTargets(`a-${i}`, mix));
   }
+});
+
+test('network spotting accepts a recently visible face, but never extends the attempt deadline', () => {
+  let now = 10_000;
+  const session = new LocalHuntSession('Alan', 'peek-latency', () => now);
+  const checkpoint = session.checkpoint();
+  const target = checkpoint.snapshot.targets.find(t => t.kind === 'hidden' && HOUSE.slots.find(s => s.id === t.slotId)!.mode === 'peek')!;
+  assert.equal(target.kind, 'hidden'); if (target.kind !== 'hidden') return;
+  const slot = HOUSE.slots.find(s => s.id === target.slotId)!;
+  checkpoint.snapshot.player.position = slot.anchor; checkpoint.snapshot.player.roomId = slot.roomId;
+  for (let elapsed = 100; elapsed < 15000; elapsed += 10) {
+    now = checkpoint.snapshot.startedAt + elapsed;
+    if (!isDadExposed(checkpoint.snapshot, slot, now) && isDadExposed(checkpoint.snapshot, slot, now - 100)) break;
+  }
+  const restored = LocalHuntSession.restore(checkpoint, () => now);
+  assert.equal(restored.spot(target.id).ok, false);
+  assert.equal(restored.spot(target.id, now - 100).ok, true);
+  now = checkpoint.snapshot.endsAt;
+  assert.equal(LocalHuntSession.restore(checkpoint, () => now).spot(target.id, now - 100).ok, false);
 });
 
 test('saved attempts preserve deadlines and hint cooldown across restore', () => {

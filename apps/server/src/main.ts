@@ -11,5 +11,5 @@ const provider = new BudgetedImageProvider(rawProvider, budget);
 const { app } = await buildApp({ directory: resolve(process.env.FATHER_HUNTER_DATA_DIR || '.father-hunter'), provider,
   dailyJobs: Math.max(1, Number(process.env.FATHER_HUNTER_DAILY_JOBS) || 20) });
 await app.listen({ host: '127.0.0.1', port: Number(process.env.FATHER_HUNTER_API_PORT) || 8787 });
-console.log(`Father Hunter photo service ready (${provider.available ? 'OpenAI connected' : 'add OPENAI_API_KEY to .env to enable photo generation'}).`);
+console.log(`Father Hunter room and photo service ready (${provider.available ? 'OpenAI connected' : 'add OPENAI_API_KEY to .env to enable photo generation'}).`);
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { app.close().then(() => { budget.close(); process.exit(0); }); });

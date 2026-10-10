@@ -125,14 +125,17 @@ export class LocalHuntSession implements HuntSession {
     this.emit();
     return { ok: true, message: slot.kind === 'toilet' ? 'Opening the commode lid…' : `Checking the ${slot.name}…`, kind: 'search', slotId };
   }
-  spot(targetId: string): ActionResult {
+  spot(targetId: string, observedAt = this.clock()): ActionResult {
     this.tick();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
     const target = this.state.targets.find(t => t.id === targetId);
     if (!target || target.claimedBy) return this.error('Already gone. Keep looking.');
     if (target.kind === 'hidden') {
       const slot = HOUSE.slots.find(s => s.id === target.slotId)!;
-      if (slot.roomId !== this.state.player.roomId || !isDadExposed(this.state, slot, this.clock())) return this.error('Check the furniture to uncover him.');
+      // A visible face may duck during a short network trip. Only visibility gets
+      // this bounded allowance; deadline and reach checks always use server time.
+      const seenAt = Number.isFinite(observedAt) ? Math.max(this.clock() - 250, Math.min(this.clock(), observedAt)) : this.clock();
+      if (slot.roomId !== this.state.player.roomId || !isDadExposed(this.state, slot, seenAt)) return this.error('Check the furniture to uncover him.');
     } else {
       const position = broomPosition(target, this.clock() - this.state.startedAt);
       if (roomAt(position) !== this.state.player.roomId) return this.error('Walk into his room first.');
@@ -146,7 +149,7 @@ export class LocalHuntSession implements HuntSession {
     this.tick();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
     const target = this.state.targets.find(t => t.id === targetId);
-    if (!target) return this.error('Suspicious, but not your father.');
+    if (!target) return this.error(`Suspicious, but not ${this.state.father.name}.`);
     if (target.claimedBy) return this.error(`Already caught. One ${this.state.father.name}, one point.`);
     let location: string, slotId: string | undefined;
     if (target.kind === 'hidden') {

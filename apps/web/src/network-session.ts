@@ -41,7 +41,7 @@ export class NetworkHuntSession implements HuntSession {
   time = () => Date.now() + this.offset;
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  private emit = () => { this.snapshot = { ...this.local.getSnapshot(), connection: this.connection, connectionMessage: this.message }; this.listeners.forEach(fn => fn()); };
+  private emit = () => { this.snapshot = { ...this.local.getSnapshot(), connection: this.connection, connectionMessage: this.message, pendingActions: this.resolvers.size }; this.listeners.forEach(fn => fn()); };
   private watchLocal() { this.localUnsubscribe?.(); this.localUnsubscribe = this.local.subscribe(this.emit); }
   private hydrate(snapshot: HuntSnapshot) {
     this.local = LocalHuntSession.restore({ snapshot, lastHintAt: snapshot.activity.find(e => e.kind === 'hint')?.at ?? null }, this.time);
@@ -63,14 +63,14 @@ export class NetworkHuntSession implements HuntSession {
     if (this.pending.reduce((sum, c) => sum + (c.kind === 'move' ? c.deltaMs : 0), 0) >= 250) return;
     const ms = Math.min(40, Math.max(0, deltaMs)); this.local.move(direction, ms);
     this.pending.push({ seq: ++this.sequence, kind: 'move', direction: { ...direction }, deltaMs: ms });
-    this.snapshot = { ...this.local.getSnapshot(), connection: this.connection, connectionMessage: this.message };
+    this.snapshot = { ...this.local.getSnapshot(), connection: this.connection, connectionMessage: this.message, pendingActions: this.resolvers.size };
   }
   private action(kind: 'search' | 'spot' | 'catch' | 'hint', id = ''): Promise<ActionResult> {
     if (!this.attemptId || this.connection !== 'online') return Promise.resolve(failed(this.message || 'Wait for the connection to return.'));
     if (this.local.getSnapshot().status !== 'playing') return Promise.resolve(failed('This hunt has finished.'));
     const seq = ++this.sequence;
     const result = new Promise<ActionResult>(resolve => this.resolvers.set(seq, resolve));
-    this.pending.push(kind === 'hint' ? { seq, kind } : { seq, kind, id }); void this.flush(); return result;
+    this.pending.push(kind === 'hint' ? { seq, kind } : { seq, kind, id, ...(kind === 'spot' ? { seenAt: this.time() } : {}) }); this.emit(); void this.flush(); return result;
   }
   search = (id: string) => this.action('search', id);
   spot = (id: string) => this.action('spot', id);
@@ -86,6 +86,7 @@ export class NetworkHuntSession implements HuntSession {
       this.pending = this.pending.filter(c => c.seq > ack); this.connection = 'online'; this.message = '';
       this.hydrate(result.view.attempt!.snapshot);
       for (const receipt of result.results) { this.resolvers.get(receipt.seq)?.(receipt.result); this.resolvers.delete(receipt.seq); }
+      this.emit();
       this.client.accept(result.view);
     } catch (error) {
       if (this.disposed) return;

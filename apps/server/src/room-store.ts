@@ -16,14 +16,15 @@ export interface RoomRecord {
   createdAt: number; expiresAt: number; resultsExpireAt: number; mix: PlacementMix;
   players: RoomPlayer[]; events: CatchEvent[]; cursor: number; cleaned: boolean;
 }
+type Awaitable<T> = T | Promise<T>;
 export interface RoomStore {
-  get(id: string): RoomRecord | undefined;
-  find(owner: string, key: string): RoomRecord | undefined;
-  insert(room: RoomRecord): boolean;
-  save(room: RoomRecord, revision: number): boolean;
-  list(): RoomRecord[];
-  remove(id: string): void;
-  close(): void;
+  get(id: string): Awaitable<RoomRecord | undefined>;
+  find(owner: string, key: string): Awaitable<RoomRecord | undefined>;
+  insert(room: RoomRecord): Awaitable<boolean>;
+  save(room: RoomRecord, revision: number): Awaitable<boolean>;
+  list(): Awaitable<RoomRecord[]>;
+  remove(id: string): Awaitable<void>;
+  close(): Awaitable<void>;
 }
 // Versioned writes keep room operations portable to DynamoDB conditional writes.
 export class SqliteRoomStore implements RoomStore {

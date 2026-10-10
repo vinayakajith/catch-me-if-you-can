@@ -27,8 +27,8 @@ export class Rooms {
   constructor(store: RoomStore, assets: AssetStore, jobs: CharacterJobs, clock: () => number = Date.now) {
     this.store = store; this.assets = assets; this.jobs = jobs; this.clock = clock;
   }
-  private get(id: string) {
-    const room = this.store.get(id);
+  private async get(id: string) {
+    const room = await this.store.get(id);
     if (!room) throw new JobError(404, 'This invite does not exist. Check the link.');
     if (this.clock() >= room.resultsExpireAt) throw new JobError(410, 'This case and its results have expired.');
     return room;
@@ -39,33 +39,35 @@ export class Rooms {
     if (!player) throw new JobError(403, 'Join this hunt before playing.');
     return player;
   }
-  private change<T>(id: string, action: (room: RoomRecord) => T): T {
+  private async change<T>(id: string, action: (room: RoomRecord) => T): Promise<T> {
     for (let n = 0; n < 5; n++) {
-      const room = this.get(id), revision = room.revision, value = action(room);
-      if (this.store.save(room, revision)) return value;
+      const room = await this.get(id), revision = room.revision, value = action(room);
+      if (await this.store.save(room, revision)) return value;
     }
     throw new JobError(409, 'The room changed. Try that again.');
   }
   private session(player: RoomPlayer) { return player.attempt ? LocalHuntSession.restore(player.attempt.checkpoint, this.clock) : null; }
   async create(owner: string, data: Record<string, unknown>, idem: string): Promise<RoomView> {
-    const old = this.store.find(owner, idem); if (old) return this.view(old.id, owner);
+    const old = await this.store.find(owner, idem); if (old) return this.view(old.id, owner);
     const playerName = name(data.name), fatherName = name(data.fatherName, 32), id = randomUUID();
     let father: CharacterPack = createFatherProfile(fatherName, BALAJI);
     if (data.characterId !== 'sample-balaji') {
-      if (typeof data.characterId !== 'string') throw new JobError(400, 'Choose a Dad for this room.');
+      if (typeof data.characterId !== 'string') throw new JobError(400, `Choose ${fatherName}’s character for this room.`);
       const job = this.jobs.get(data.characterId, owner), preview = this.jobs.view(job).preview;
-      if (job.status !== 'ready' || !preview) throw new JobError(409, 'Finish making Dad before creating his room.');
+      if (job.status !== 'ready' || !preview) throw new JobError(409, `Finish making ${fatherName} before creating his room.`);
       await this.assets.write(id, 'atlas.png', await this.jobs.asset(job.id, owner, 'atlas.png'));
       father = createFatherProfile(fatherName, { ...preview, atlas: `/api/rooms/${id}/assets/atlas.png` });
     }
     const now = this.clock(); father.expiresAt = now + EXPIRY_MS;
     const room: RoomRecord = { id, owner, key: idem, revision: 1, father, createdAt: now, expiresAt: now + EXPIRY_MS, resultsExpireAt: now + EXPIRY_MS + RESULTS_MS,
       mix: placementMix(placeTargets(id)), players: [{ id: randomUUID(), owner, name: playerName, joinedAt: now, bestScore: 0, attempt: null }], events: [], cursor: 0, cleaned: false };
-    if (!this.store.insert(room)) { await this.assets.remove(id); return this.view(this.store.find(owner, idem)!.id, owner); }
+    try {
+      if (!await this.store.insert(room)) { await this.assets.remove(id); return this.view((await this.store.find(owner, idem))!.id, owner); }
+    } catch (error) { await this.assets.remove(id); throw error; }
     return this.view(id, owner);
   }
-  join(id: string, owner: string, playerName: unknown) {
-    this.change(id, room => {
+  async join(id: string, owner: string, playerName: unknown) {
+    await this.change(id, room => {
       this.open(room);
       if (room.players.some(p => p.owner === owner)) return;
       if (room.players.length >= MAX_PLAYERS) throw new JobError(409, 'All five agent seats are taken.');
@@ -75,8 +77,8 @@ export class Rooms {
     });
     return this.view(id, owner);
   }
-  view(id: string, owner: string, after = 0): RoomView {
-    const room = this.get(id), now = this.clock(), closed = now >= room.expiresAt, me = room.players.find(p => p.owner === owner);
+  async view(id: string, owner: string, after = 0): Promise<RoomView> {
+    const room = await this.get(id), now = this.clock(), closed = now >= room.expiresAt, me = room.players.find(p => p.owner === owner);
     const standings = room.players.map(p => {
       const session = this.session(p); session?.tick(); const snapshot = session?.getSnapshot();
       return { id: p.id, name: p.name, bestScore: p.bestScore, currentScore: snapshot?.player.score ?? 0, playing: !closed && snapshot?.status === 'playing', rank: 0 };
@@ -88,8 +90,8 @@ export class Rooms {
       standings: me || closed ? standings : [], events: me && !closed ? room.events.filter(e => e.id > after) : [], cursor: room.cursor, revision: room.revision, serverNow: now,
       attempt: session && me?.attempt ? { id: me.attempt.id, snapshot: session.getSnapshot(), ack: me.attempt.ack } : null };
   }
-  start(id: string, owner: string, idem: string, controller: string): ControlledAttempt {
-    this.change(id, room => {
+  async start(id: string, owner: string, idem: string, controller: string): Promise<ControlledAttempt> {
+    await this.change(id, room => {
       this.open(room); const player = this.member(room, owner);
       if (player.attempt?.key === idem) {
         if (player.attempt.controller !== hash(controller)) throw new JobError(409, 'Resume the current attempt on this device.');
@@ -104,19 +106,19 @@ export class Rooms {
       const session = new LocalHuntSession(player.name, seed, this.clock, true, room.father, { id: attemptId, playerId: player.id, expiresAt: room.expiresAt, targets });
       player.attempt = { id: attemptId, key: idem, controller: hash(controller), checkpoint: session.checkpoint(), ack: 0, moveCredit: 0, creditAt: now, receipts: [] };
     });
-    return { view: this.view(id, owner), controller };
+    return { view: await this.view(id, owner), controller };
   }
-  resume(id: string, owner: string, attemptId: string, controller: string): ControlledAttempt {
-    this.change(id, room => {
+  async resume(id: string, owner: string, attemptId: string, controller: string): Promise<ControlledAttempt> {
+    await this.change(id, room => {
       this.open(room); const attempt = this.member(room, owner).attempt;
       if (!attempt || attempt.id !== attemptId) throw new JobError(409, 'This attempt has been replaced. Open the latest hunt.');
       attempt.controller = hash(controller);
     });
-    return { view: this.view(id, owner), controller };
+    return { view: await this.view(id, owner), controller };
   }
-  commands(id: string, owner: string, attemptId: string, controller: string, commands: HuntCommand[]): CommandResponse {
+  async commands(id: string, owner: string, attemptId: string, controller: string, commands: HuntCommand[]): Promise<CommandResponse> {
     if (!Array.isArray(commands) || commands.length > 128 || commands.some(c => !c || !Number.isSafeInteger(c.seq) || c.seq < 1)) throw new JobError(400, 'Invalid command batch.');
-    const results = this.change(id, room => {
+    const results = await this.change(id, room => {
       this.open(room); const player = this.member(room, owner), attempt = player.attempt;
       if (!attempt || attempt.id !== attemptId) throw new JobError(409, 'This attempt has been replaced.');
       if (attempt.controller !== hash(controller)) throw new JobError(409, 'This hunt is now controlled by another tab. Resume here to take over.');
@@ -133,7 +135,7 @@ export class Rooms {
           session.move(command.direction, allowed);
         } else if (command.kind === 'hint') result = session.hint();
         else if (['search', 'spot', 'catch'].includes(command.kind) && typeof command.id === 'string' && command.id.length < 100) {
-          result = session[command.kind](command.id);
+          result = command.kind === 'spot' ? session.spot(command.id, command.seenAt) : session[command.kind](command.id);
           if (command.kind === 'catch' && result.ok) {
             const snapshot = session.getSnapshot(), target = snapshot.targets.find(t => t.id === command.id)!;
             const slot = target.kind === 'hidden' ? HOUSE.slots.find(s => s.id === target.slotId) : null;
@@ -147,22 +149,22 @@ export class Rooms {
       }
       attempt.checkpoint = session.checkpoint(); return replies;
     });
-    return { view: this.view(id, owner), results };
+    return { view: await this.view(id, owner), results };
   }
   async asset(id: string, owner: string, filename: string) {
-    const room = this.get(id); this.open(room); this.member(room, owner);
+    const room = await this.get(id); this.open(room); this.member(room, owner);
     if (filename !== 'atlas.png' || !room.father.atlas.startsWith('/api/rooms/')) throw new JobError(404, 'Image not found.');
     return this.assets.read(id, filename);
   }
   async cleanup() {
-    for (const room of this.store.list()) {
+    for (const room of await this.store.list()) {
       if (this.clock() < room.expiresAt) continue;
       await this.assets.remove(room.id);
-      if (this.clock() >= room.resultsExpireAt) { this.store.remove(room.id); continue; }
-      if (!room.cleaned) this.change(room.id, current => { current.cleaned = true; current.events = []; current.father.atlas = ''; for (const p of current.players) p.attempt = null; });
+      if (this.clock() >= room.resultsExpireAt) { await this.store.remove(room.id); continue; }
+      if (!room.cleaned) await this.change(room.id, current => { current.cleaned = true; current.events = []; current.father.atlas = ''; for (const p of current.players) p.attempt = null; });
     }
   }
-  close() { this.store.close(); }
+  async close() { await this.store.close(); }
 }
 
 export function registerRooms(app: FastifyInstance, rooms: Rooms) {
