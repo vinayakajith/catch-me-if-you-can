@@ -55,12 +55,10 @@ export class HouseScene extends Phaser.Scene {
       const prop = this.add.image(p.x + p.w / 2, p.y + p.h / 2, slot.kind).setDisplaySize(p.w, p.h).setDepth(p.y + p.h);
       this.props.set(slot.id, prop);
       if (slot.kind === 'toilet') this.rims.set(slot.id, this.add.image(p.x + p.w / 2, p.y + p.h / 2, 'toilet-rim').setDisplaySize(p.w, p.h).setDepth(1501).setVisible(false));
-      const dad = this.add.image(slot.target.x, slot.target.y, 'balaji', 1).setDisplaySize(78, 78).setDepth(p.y - 1).setVisible(false);
-      // Frame-relative cropping works in both Phaser 4 renderers. Keep only a
-      // glimpse above the furniture until this hiding place is opened.
-      const sx = dad.width / dad.displayWidth, sy = dad.height / dad.displayHeight;
-      dad.setCrop((slot.hit.x - dad.x + dad.displayWidth / 2) * sx,
-        (slot.hit.y - dad.y + dad.displayHeight / 2) * sy, slot.hit.w * sx, slot.hit.h * sy);
+      const dad = this.add.image(slot.target.x, slot.target.y, 'balaji', 1).setDisplaySize(64, 64).setDepth(p.y - 1).setVisible(false);
+      // Furniture covers the lower face. Preserve the hair outline so peeks
+      // blend into the scene; generous interaction bounds still suit touch.
+      dad.setCrop(0, 0, dad.width, dad.height * .7);
       this.dads.set(slot.id, dad);
     }
     this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y - 25, 'hunter').setDisplaySize(57, 66).setDepth(2000);
@@ -207,7 +205,7 @@ export class HouseScene extends Phaser.Scene {
         this.rims.get(slot.id)?.setVisible(true);
         if (target && !target.claimedBy) {
           dad.setCrop(); const p = this.dadPoint(slot);
-          dad.setPosition(p.x, p.y).setDepth(1500).setFrame(2).setVisible(true);
+          dad.setPosition(p.x, p.y).setDisplaySize(78, 78).setDepth(1500).setFrame(2).setVisible(true);
           if (slot.kind === 'toilet') dad.setDisplaySize(64, 64).setCrop(0, 0, dad.width, dad.height * .72);
           if (!this.bridge.reducedMotion) this.tweens.add({ targets: dad, y: { from: p.y + 20, to: p.y }, duration: 360, ease: 'Back.Out' });
         }
@@ -224,7 +222,7 @@ export class HouseScene extends Phaser.Scene {
 
   private react(slot: HidingSlot) {
     const dad = this.dads.get(slot.id)!;
-    dad.setCrop().setFrame(3).setDepth(2100).setVisible(true);
+    dad.setCrop().setFrame(3).setDisplaySize(86, 86).setDepth(2100).setVisible(true);
     const label = this.add.text(dad.x, dad.y - 53, '+1 BALAJI', { fontFamily: 'Arial', fontSize: '15px', fontStyle: 'bold', color: '#fff1c5', backgroundColor: '#3d6555', padding: { x: 10, y: 6 } }).setOrigin(.5).setDepth(2300);
     if (this.bridge.reducedMotion) this.time.delayedCall(800, () => { dad.setVisible(false); label.destroy(); });
     else {

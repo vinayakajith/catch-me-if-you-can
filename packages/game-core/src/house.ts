@@ -57,7 +57,7 @@ const slots: HidingSlot[] = [];
 for (const room of rooms.filter(r => r.id !== 'hall')) {
   for (const [id, kind, mode, x, y, w, h, clue, reaction, empty] of content[room.id as Exclude<RoomId, 'hall'>]) {
     const prop = { x: room.x + x - w / 2, y: room.y + y - h / 2, w, h };
-    const target = { x: prop.x + w * (kind === 'toilet' ? .5 : .7), y: prop.y - 9 };
+    const target = { x: prop.x + w * (kind === 'toilet' ? .5 : .7), y: prop.y + h * .14 };
     slots.push({ id: `${room.id}-${id}`, roomId: room.id, name: id === 'toilet' ? 'commode lid' : id.replaceAll('-', ' '), kind, mode, prop,
       anchor: { x: prop.x + w / 2, y: prop.y + h + 26 }, target,
       hit: { x: target.x - 23, y: target.y - 27, w: 46, h: 38 }, clue, reaction, empty });

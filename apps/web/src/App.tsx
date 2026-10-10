@@ -37,7 +37,7 @@ function Landing({ onStart }: { onStart: (name: string) => void }) {
           <p className="hero-description">One suspicious house. Twelve hidden Balajis.<br className="desktop-break" /> Find them before the tea gets cold.</p>
           <form className="start-form" onSubmit={submit}>
             <label htmlFor="player-name">WHAT SHOULD WE CALL YOU, DETECTIVE?</label>
-            <div className="start-fields"><input id="player-name" name="name" autoComplete="given-name" placeholder="Your name goes here" maxLength={24} value={name} onChange={e => setName(e.target.value)} required /><button className="button primary" type="submit">Let’s find dad <ArrowRight size={20} /></button></div>
+            <div className="start-fields"><input id="player-name" name="name" autoComplete="given-name" placeholder="Your name" maxLength={24} value={name} onChange={e => setName(e.target.value)} required /><button className="button primary" type="submit">Let’s find dad <ArrowRight size={20} /></button></div>
             <div className="start-note"><Check size={14} /> No signup. No gaming skills. Just suspicious instincts.</div>
           </form>
           <div className="hero-stats"><span><Home size={17} /><b>5</b> rooms</span><span><Search size={17} /><b>12</b> dads</span><span><Clock3 size={17} /><b>10</b> minutes</span></div>
