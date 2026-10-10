@@ -1,4 +1,7 @@
 import { HOUSE, canReach, isWalkable, roomAt } from './house.ts';
+import { random, shuffled } from './random.ts';
+import { CASES } from './cases.ts';
+import { isDadExposed } from './peeking.ts';
 import type { ActionResult, Activity, HuntSession, HuntSnapshot, Point, Target } from './types.ts';
 
 export const ROUND_MS = 10 * 60 * 1000;
@@ -6,28 +9,27 @@ export const EXPIRY_MS = 60 * 60 * 1000;
 export const SEARCH_MS = 1000;
 export const HINT_MS = 60 * 1000;
 
-function random(seed: string) {
-  let h = 2166136261;
-  for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-  return () => { h += 0x6D2B79F5; let t = Math.imul(h ^ h >>> 15, 1 | h); t ^= t + Math.imul(t ^ t >>> 7, 61 | t); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-}
-
+export const TARGET_COUNT = 6;
 export function placeTargets(seed: string): Target[] {
   const rng = random(seed);
-  const shuffle = <T,>(list: T[]): T[] => {
-    const a = [...list];
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
+  // Backtracking over a shuffled catalogue guarantees the constraints without retry limits.
+  const candidates = shuffled(HOUSE.slots, rng);
+  const select = (from: number, chosen: typeof candidates): typeof candidates | undefined => {
+    if (chosen.length === TARGET_COUNT) return new Set(chosen.map(s => s.roomId)).size >= 4 ? chosen : undefined;
+    for (let i = from; i < candidates.length; i++) {
+      const slot = candidates[i];
+      if (chosen.filter(s => s.mode === slot.mode).length >= 3 || chosen.filter(s => s.roomId === slot.roomId).length >= 2) continue;
+      const result = select(i + 1, [...chosen, slot]);
+      if (result) return result;
+    }
   };
-  const selected: string[] = [];
-  for (const room of HOUSE.rooms.filter(r => r.id !== 'hall')) {
-    const slots = HOUSE.slots.filter(s => s.roomId === room.id);
-    selected.push(room.id === 'living' && seed === 'welcome-home' ? 'living-sofa' : shuffle(slots.filter(s => s.mode === 'peek'))[0].id);
-    // The commode reveal is a signature joke in this house, present on every run.
-    selected.push(room.id === 'bathroom' ? 'bathroom-toilet' : shuffle(slots.filter(s => s.mode === 'search'))[0].id);
-  }
-  selected.push(...shuffle(HOUSE.slots.filter(s => s.mode === 'peek' && !selected.includes(s.id))).slice(0, 2).map(s => s.id));
-  return selected.map((slotId, i) => ({ id: `dad-${i + 1}`, slotId, claimedBy: null, claimedAt: null }));
+  return select(0, [])!.map((s, i) => ({ id: `dad-${i + 1}`, slotId: s.id, claimedBy: null, claimedAt: null }));
+}
+const signature = (seed: string) => placeTargets(seed).map(t => t.slotId).sort().join('|');
+export function freshHuntSeed(previous: string | undefined, entropy: string): string {
+  let seed = entropy, attempt = 0;
+  while (previous && signature(seed) === signature(previous)) seed = `${entropy}-${++attempt}`;
+  return seed;
 }
 
 export class LocalHuntSession implements HuntSession {
@@ -37,13 +39,12 @@ export class LocalHuntSession implements HuntSession {
   private lastSecond = -1;
   private lastHintAt = -Infinity;
   private clock: () => number;
-  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true) {
+  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true, caseId = CASES[0].id) {
     this.clock = clock;
     const now = clock();
-    this.state = { id: `solo-${seed}`, seed, status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
+    this.state = { id: `solo-${seed}`, seed, case: CASES.find(c => c.id === caseId) ?? CASES[0], status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
       player: { id: 'hunter-1', name: name.trim().slice(0, 24) || 'Detective', position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
-      targets: placeTargets(seed), opened: [], search: null,
-      activity: [{ id: 0, text: 'Balaji is missing. In twelve separate places.', kind: 'welcome', at: now }] };
+      targets: placeTargets(seed), opened: [], spotted: [], search: null, activity: [] };
   }
   getSnapshot = () => this.state;
   start() {
@@ -75,8 +76,8 @@ export class LocalHuntSession implements HuntSession {
       if (canReach(this.state.player.position, slot)) {
         this.state = { ...this.state, opened: [...this.state.opened, slot.id] };
         const occupied = this.state.targets.some(t => t.slotId === slot.id && !t.claimedBy);
-        this.addActivity(occupied ? (slot.kind === 'toilet' ? 'The lid is up. WHY IS HE IN THERE?! Tap Balaji!' : 'Well, well, well. Tap Balaji to catch him!') : slot.empty, 'search', slot.id);
-      } else this.addActivity('You walked away. The mystery remains.', 'search');
+        this.addActivity(occupied ? 'Balaji uncovered.' : 'Checked. Empty.', 'search', slot.id);
+      }
       changed = true;
     }
     const second = Math.floor(now / 1000);
@@ -110,6 +111,15 @@ export class LocalHuntSession implements HuntSession {
     this.emit();
     return { ok: true, message: slot.kind === 'toilet' ? 'Opening the commode lid…' : `Checking the ${slot.name}…`, kind: 'search', slotId };
   }
+  spot(slotId: string): ActionResult {
+    this.tick();
+    if (this.state.status !== 'playing') return this.error('This hunt has finished.');
+    const slot = HOUSE.slots.find(s => s.id === slotId);
+    const target = this.state.targets.find(t => t.slotId === slotId && !t.claimedBy);
+    if (!slot || !target || slot.roomId !== this.state.player.roomId || !isDadExposed(this.state, slot, this.clock())) return this.error('Check the furniture to uncover him.');
+    if (!this.state.spotted.includes(slotId)) { this.state = { ...this.state, spotted: [...this.state.spotted, slotId] }; this.emit(); }
+    return { ok: true, message: '', kind: 'spot', slotId };
+  }
   catch(slotId: string): ActionResult {
     this.tick();
     if (this.state.status !== 'playing') return this.error('This hunt has finished.');
@@ -118,7 +128,7 @@ export class LocalHuntSession implements HuntSession {
     const target = this.state.targets.find(t => t.slotId === slotId);
     if (!target) return this.error('Suspicious, but not your father.');
     if (target.claimedBy) return this.error('Already caught. One Balaji, one point.');
-    if (slot.mode === 'search' && !this.state.opened.includes(slotId)) return this.error('Open it first. Something is definitely in there.');
+    if (!isDadExposed(this.state, slot, this.clock())) return this.error('Check it first to uncover Balaji.');
     const now = this.clock();
     this.state = { ...this.state, lastCatchAt: now,
       targets: this.state.targets.map(t => t.id === target.id ? { ...t, claimedBy: this.state.player.id, claimedAt: now } : t),
@@ -127,7 +137,7 @@ export class LocalHuntSession implements HuntSession {
     this.addActivity(`${this.state.player.name} found Balaji ${slot.kind === 'toilet' ? 'inside the commode' : `by the ${slot.name} in the ${room.name.toLowerCase()}`}.`, 'catch', slotId);
     if (this.state.targets.every(t => t.claimedBy)) this.finish('complete');
     this.emit();
-    return { ok: true, message: slot.reaction, kind: 'catch', slotId };
+    return { ok: true, message: '', kind: 'catch', slotId };
   }
   hint(): ActionResult {
     this.tick();
