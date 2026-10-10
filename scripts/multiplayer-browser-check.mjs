@@ -160,13 +160,13 @@ try {
     await last.evaluate(id => { void window.__huntTest.session.catch(id); }, waitingTarget.id);
     await last.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'finished');
     assert.equal(await last.locator('.result-card').count(), 0, 'Results wait for the outstanding catch receipt');
-    await Promise.all(pages.map(page => page.getByRole('button', { name: 'Try to beat your sack', exact: true }).waitFor({ timeout: 125000 })));
+    await Promise.all(pages.map(page => page.getByRole('button', { name: 'Replay', exact: true }).waitFor({ timeout: 125000 })));
     for (const page of pages) { assert.equal(await page.locator('.result-card .standing-score').count(), 5); assert.equal(await page.locator('.result-stats strong').nth(1).innerText(), '2:00'); }
     assert.ok(delayedCatch); assert.equal(await last.locator('.result-stats strong').first().innerText(), '2');
     assert.equal(await last.locator('#result-title').innerText(), 'Suresh still has alibis.');
     await pages[1].screenshot({ path: join(artifacts, 'multiplayer-mobile-results.png') });
     const previous = await host.evaluate(() => window.__huntTest.session.getSnapshot().seed);
-    await host.getByRole('button', { name: 'Try to beat your sack', exact: true }).click(); await host.getByRole('button', { name: 'Skip intro & hunt', exact: true }).click();
+    await host.getByRole('button', { name: 'Replay', exact: true }).click(); await host.getByRole('button', { name: 'Skip intro & hunt', exact: true }).click();
     await host.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing');
     assert.notEqual(await host.evaluate(() => window.__huntTest.session.getSnapshot().seed), previous);
     const hostPlayerId = confirmed.me.id;
@@ -174,6 +174,27 @@ try {
     offset += 3600001;
     await Promise.all(pages.map(page => page.getByText('Final standings', { exact: true }).waitFor()));
     console.log('PASS real two-minute deadlines, delayed final catch, named mobile results, best-score replay, and one-hour room closure');
+    const childIds = await Promise.all(pages.map(async (page, i) => {
+      await page.getByRole('button', { name: 'Create your own game', exact: true }).click();
+      await page.getByRole('button', { name: /Use Suresh/ }).waitFor();
+      assert.equal(await page.getByRole('button', { name: /Use Suresh/ }).getAttribute('aria-pressed'), 'true');
+      if (i === 1) {
+        await page.screenshot({ path: join(artifacts, 'mobile-create-own-game.png') });
+        await page.getByRole('button', { name: /Upload someone else/ }).click();
+        await page.getByLabel('Troublemaker’s name', { exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Back to the hunt', exact: true }).click();
+      }
+      await page.getByRole('button', { name: 'Create hunt', exact: true }).click();
+      await page.getByRole('button', { name: 'Enter the house', exact: true }).waitFor();
+      const newId = new URL(page.url()).pathname.split('/').pop();
+      const view = await (await page.request.get(`${base}/api/rooms/${newId}`)).json();
+      assert.equal(view.room.playerCount, 1); assert.equal(view.standings[0].bestScore, 0);
+      assert.ok(view.room.expiresAt - view.serverNow > 3590000);
+      assert.ok((await page.request.get(`${base}${view.father.atlas}`)).ok());
+      return newId;
+    }));
+    assert.equal(new Set(childIds).size, 5); assert.ok(!childIds.includes(lostRoom));
+    console.log('PASS all five players create independent fresh one-hour links from retained personal artwork; mobile upload alternative is clear');
   }
   assert.deepEqual(errors, []); assert.equal(provider.calls.length, 6, 'Only the six local fixture expressions were made');
 } catch (error) {

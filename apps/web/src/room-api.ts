@@ -16,8 +16,8 @@ export async function roomRequest<T>(url: string, data?: object, key?: string): 
   } catch (error) { if (error instanceof RoomApiError) throw error; throw new RoomApiError(0, 'Reconnecting… your timer is still running.'); }
   finally { clearTimeout(timeout); }
 }
-export const createRoom = (name: string, fatherName: string, characterId: string, key: string) => roomRequest<RoomView>('/api/rooms', { name, fatherName, characterId }, key);
-export const roomConfig = () => roomRequest<{ shareOrigin: string; lanAvailable: boolean }>('/api/rooms/config');
+export const createRoom = (name: string, fatherName: string, character: { characterId: string } | { sourceRoomId: string }, key: string) => roomRequest<RoomView>('/api/rooms', { name, fatherName, ...character }, key);
+export const roomConfig = () => roomRequest<{ shareOrigin: string; public: boolean; lanAvailable: boolean }>('/api/rooms/config');
 
 export class RoomClient {
   readonly id: string;
