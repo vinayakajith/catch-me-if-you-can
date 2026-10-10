@@ -19,9 +19,7 @@ export class HouseScene extends Phaser.Scene {
   private hunter!: Phaser.GameObjects.Image;
   private props = new Map<string, Phaser.GameObjects.Image>();
   private dads = new Map<string, Phaser.GameObjects.Image>();
-  private masks = new Map<string, Phaser.Display.Masks.GeometryMask>();
   private fog = new Map<string, Phaser.GameObjects.Rectangle>();
-  private shown = new Set<string>();
   private reacted = new Set<string>();
   private opened = new Set<string>();
   private route: Point[] = [];
@@ -55,10 +53,11 @@ export class HouseScene extends Phaser.Scene {
       const prop = this.add.image(p.x + p.w / 2, p.y + p.h / 2, slot.kind).setDisplaySize(p.w, p.h).setDepth(p.y + p.h);
       this.props.set(slot.id, prop);
       const dad = this.add.image(slot.target.x, slot.target.y, 'balaji', 1).setDisplaySize(78, 78).setDepth(p.y - 1).setVisible(false);
-      const maskGraphics = this.make.graphics({ x: 0, y: 0 });
-      maskGraphics.fillStyle(0xffffff).fillRect(slot.hit.x, slot.hit.y, slot.hit.w, slot.hit.h);
-      const mask = maskGraphics.createGeometryMask();
-      this.masks.set(slot.id, mask); dad.setMask(mask);
+      // Frame-relative cropping works in both Phaser 4 renderers. Keep only a
+      // glimpse above the furniture until this hiding place is opened.
+      const sx = dad.width / dad.displayWidth, sy = dad.height / dad.displayHeight;
+      dad.setCrop((slot.hit.x - dad.x + dad.displayWidth / 2) * sx,
+        (slot.hit.y - dad.y + dad.displayHeight / 2) * sy, slot.hit.w * sx, slot.hit.h * sy);
       this.dads.set(slot.id, dad);
     }
     this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y - 25, 'hunter').setDisplaySize(57, 66).setDepth(2000);
@@ -202,7 +201,7 @@ export class HouseScene extends Phaser.Scene {
       if (state.opened.includes(slot.id) && !this.opened.has(slot.id)) {
         this.opened.add(slot.id); this.props.get(slot.id)!.setTexture(`${slot.kind}-open`);
         if (target && !target.claimedBy) {
-          dad.clearMask(); const p = this.dadPoint(slot);
+          dad.setCrop(); const p = this.dadPoint(slot);
           dad.setPosition(p.x, p.y).setDepth(1500).setFrame(2).setVisible(true);
           if (!this.bridge.reducedMotion) this.tweens.add({ targets: dad, y: { from: p.y + 20, to: p.y }, duration: 360, ease: 'Back.Out' });
         }
@@ -214,13 +213,12 @@ export class HouseScene extends Phaser.Scene {
       }
       const visible = state.player.roomId === slot.roomId && (slot.mode === 'peek' || this.opened.has(slot.id));
       dad.setVisible(visible);
-      if (visible) this.shown.add(slot.id);
     }
   }
 
   private react(slot: HidingSlot) {
     const dad = this.dads.get(slot.id)!;
-    dad.clearMask().setFrame(3).setDepth(2100).setVisible(true);
+    dad.setCrop().setFrame(3).setDepth(2100).setVisible(true);
     const label = this.add.text(dad.x, dad.y - 53, '+1 BALAJI', { fontFamily: 'Arial', fontSize: '15px', fontStyle: 'bold', color: '#fff1c5', backgroundColor: '#3d6555', padding: { x: 10, y: 6 } }).setOrigin(.5).setDepth(2300);
     if (this.bridge.reducedMotion) this.time.delayedCall(800, () => { dad.setVisible(false); label.destroy(); });
     else {

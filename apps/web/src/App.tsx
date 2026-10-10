@@ -100,12 +100,12 @@ function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }:
   const ended = state.status === 'finished' || state.status === 'expired';
   bridge.inputEnabled = ready && !ended && !leaving && !help && !mapOpen;
   useEffect(() => {
-    if (!ended && !leaving && !help) return;
+    if (!ended && !leaving && !help && !mapOpen) return;
     const previous = document.activeElement as HTMLElement | null;
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     dialog?.querySelector<HTMLButtonElement>('button')?.focus();
     const trap = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !ended) { setHelp(false); setLeaving(false); }
+      if (event.key === 'Escape' && !ended) { setHelp(false); setLeaving(false); setMapOpen(false); }
       if (event.key !== 'Tab' || !dialog) return;
       const buttons = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')];
       const first = buttons[0], last = buttons.at(-1);
@@ -114,7 +114,7 @@ function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }:
     };
     document.addEventListener('keydown', trap);
     return () => { document.removeEventListener('keydown', trap); previous?.focus(); };
-  }, [ended, leaving, help]);
+  }, [ended, leaving, help, mapOpen]);
   const coach = state.player.score > 0 ? 'You got him! Keep exploring. Every room has more questionable alibis.' : state.opened.some(id => state.targets.some(t => t.slotId === id)) ? 'There he is! Tap Balaji’s face to catch him and score a point.' : state.player.roomId !== 'hall' ? 'Tap furniture to check it. Look closely for little glimpses of a face.' : 'Tap a doorway to explore. The living room is a good place to start.';
   const navigate = (point: Point) => { bridge.navigate?.(point); setMapOpen(false); };
 
@@ -141,7 +141,7 @@ function Round({ name, seed, preferences, togglePreference, onLeave, onReplay }:
           <div className="game-caption"><span><MousePointer2 size={15} /> Tap to walk · Tap things to check · Tap dads to catch</span><span className="keyboard-note"><kbd>W A S D</kbd> also works</span></div>
         </section>
         {mapOpen && <button className="map-backdrop" aria-label="Close map" onClick={() => setMapOpen(false)} />}
-        <aside className={`case-file ${mapOpen ? 'is-open' : ''}`}><div className="case-file-heading"><span className="eyebrow">YOUR CASE FILE</span><button className="map-close icon-button" aria-label="Close map" onClick={() => setMapOpen(false)}><X size={19} /></button></div>
+        <aside className={`case-file ${mapOpen ? 'is-open' : ''}`} role={mapOpen && !ended ? 'dialog' : undefined} aria-modal={mapOpen && !ended ? true : undefined} aria-labelledby="case-file-title"><div className="case-file-heading"><span className="eyebrow" id="case-file-title">YOUR CASE FILE</span><button className="map-close icon-button" aria-label="Close map" onClick={() => setMapOpen(false)}><X size={19} /></button></div>
           <div className="suspect"><div className="suspect-photo"><Dad expression={1} /></div><div><small>PERSON OF INTEREST</small><h2>Balaji</h2><p>One dad. Many bad decisions.</p></div></div>
           <div className="dad-tally" aria-label={`${state.player.score} of 12 fathers found`}>{Array.from({ length: 12 }, (_, i) => <span key={i} className={i < state.player.score ? 'caught' : ''}>{i < state.player.score ? <Check size={15} /> : <span className="mini-moustache">⌁</span>}</span>)}</div>
           <div className="map-heading"><span>THE HOUSE</span><small>Tap a room to walk there</small></div><HouseMap snapshot={state} navigate={navigate} />

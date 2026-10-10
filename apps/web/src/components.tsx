@@ -12,7 +12,7 @@ export function Dad({ expression = 0, className = '' }: { expression?: number; c
 const entrances: Record<RoomId, Point> = { living: { x: 610, y: 315 }, kitchen: { x: 885, y: 315 }, bedroom: { x: 270, y: 682 }, bathroom: { x: 760, y: 682 }, storeroom: { x: 1240, y: 682 }, hall: HOUSE.spawn };
 const labels: Record<RoomId, string> = { living: 'LIVING', kitchen: 'KITCHEN', bedroom: 'BEDROOM', bathroom: 'BATH', storeroom: 'STORE', hall: '' };
 export function HouseMap({ snapshot, navigate }: { snapshot: HuntSnapshot; navigate: (point: Point) => void }) {
-  return <svg className="house-map" viewBox="0 0 1520 1110" role="img" aria-label="House map. Select a room to walk there.">
+  return <svg className="house-map" viewBox="0 0 1520 1110" role="group" aria-label="House map. Select a room to walk there.">
     {HOUSE.passages.map((p, i) => <rect key={`p-${i}`} x={p.x} y={p.y} width={p.w} height={p.h} fill="#e8dfc9" />)}
     {HOUSE.rooms.map(room => <g key={room.id} role="button" tabIndex={0} aria-label={`Walk to ${room.name}`} onClick={() => navigate(entrances[room.id])} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(entrances[room.id]); } }}>
       <rect x={room.x} y={room.y} width={room.w} height={room.h} rx="20" fill={room.id === snapshot.player.roomId ? '#90aa8b' : '#e8dfc9'} stroke={room.id === snapshot.player.roomId ? '#53775e' : '#bdb49b'} strokeWidth="13" />
