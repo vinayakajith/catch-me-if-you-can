@@ -29,7 +29,7 @@ async function start(page, name, seed = fixtureSeed, options = {}) {
   if (options.reviewIntro) await reviewIntro(page, options.fatherName, options.mobile);
   else await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).click();
   await page.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'playing');
-  assert.ok(await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - Date.now() > 179000), 'Taking the case grants the full three minutes');
+  assert.ok(await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - Date.now() > 119000), 'Taking the case grants the full two minutes');
   assert.equal(await page.locator('.activity-list').count(), 0, 'No mid-game gossip feed');
   const transparent = await page.evaluate(async () => {
     const img = new Image(); img.src = '/assets/detective-poses.png'; await img.decode();
@@ -218,10 +218,10 @@ async function checkEdges(browser) {
   await waitForBag(page, 1);
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().player.roomId), 'living', 'A tap on the lit statue walks through the doorway');
   assert.equal(await page.locator('.hud-stat').count(), 2, 'Only time and the actual bag count are shown');
-  await page.clock.fastForward(180001);
+  await page.clock.fastForward(120001);
   await page.locator('.result-card').waitFor();
   assert.equal(await page.evaluate(() => window.__huntTest.session.getSnapshot().finishReason), 'timeout');
-  assert.match(await page.locator('.result-player').innerText(), /caught 1 Suresh in 3 minutes/);
+  assert.match(await page.locator('.result-player').innerText(), /caught 1 Suresh in 2 minutes/);
   const card = await page.locator('.result-card').boundingBox();
   assert.ok(card.y >= 0 && card.y + card.height <= 568, 'Result card fits a short phone');
   const again = await page.getByRole('button', {name:/Take another case/}).boundingBox();
@@ -252,7 +252,7 @@ async function checkEdges(browser) {
   assert.equal(await slow.evaluate(()=>window.__huntTest.session.getSnapshot().status),'ready');
   for(let i=0;i<12;i++){await slow.keyboard.press('Tab');assert.equal(await slow.evaluate(()=>document.querySelector('[role="dialog"]').contains(document.activeElement)),true);}
   await slow.getByRole('button',{name:'Skip intro & hunt',exact:true}).click();
-  assert.ok(await slow.evaluate(()=>window.__huntTest.session.getSnapshot().endsAt-Date.now()>179000));
+  assert.ok(await slow.evaluate(()=>window.__huntTest.session.getSnapshot().endsAt-Date.now()>119000));
   await faults.close();
   console.log('PASS lab fallback, failed character recovery, slow art, keyboard focus and full timer after loading');
 }

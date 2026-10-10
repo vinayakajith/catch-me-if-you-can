@@ -7,6 +7,8 @@ import { GenerationError, type ImageProvider } from './contracts.ts';
 import { MAX_UPLOAD_BYTES } from './images.ts';
 import { CharacterJobs, JobError } from './jobs.ts';
 import { DiskAssetStore, SqliteJobStore } from './storage.ts';
+import { SqliteRoomStore } from './room-store.ts';
+import { Rooms, registerRooms } from './rooms.ts';
 
 function owner(token?: string) { return createHash('sha256').update(token ?? '').digest('hex'); }
 function validName(value: unknown) {
@@ -23,7 +25,9 @@ export async function buildApp(options: { directory: string; provider: ImageProv
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 1, parts: 2 } });
   const jobs = new CharacterJobs({ ...options, store: new SqliteJobStore(options.directory), assets: new DiskAssetStore(options.directory) });
   await jobs.initialize();
-  const cleanup = setInterval(() => { jobs.cleanup().catch(() => console.error('Character cleanup will retry.')); }, 60_000); cleanup.unref();
+  const rooms = new Rooms(new SqliteRoomStore(options.directory), new DiskAssetStore(options.directory), jobs, options.clock);
+  await rooms.cleanup();
+  const cleanup = setInterval(() => { Promise.all([jobs.cleanup(), rooms.cleanup()]).catch(() => console.error('Asset cleanup will retry.')); }, 60_000); cleanup.unref();
   app.addHook('onRequest', async (request, reply) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       if (request.headers['x-fh-request'] !== '1') throw new JobError(403, 'Please use Father Hunter to create your Dad.');
@@ -76,14 +80,16 @@ export async function buildApp(options: { directory: string; provider: ImageProv
     const bytes = await jobs.asset(request.params.id, owner(request.cookies['fh-owner']), request.params.name);
     return reply.type(request.params.name.endsWith('.jpg') ? 'image/jpeg' : 'image/png').send(bytes);
   });
-  app.setErrorHandler((error, _request, reply) => {
+  registerRooms(app, rooms);
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof JobError) return reply.code(error.status).send({ message: error.message });
     if (error instanceof GenerationError) return reply.code(400).send({ message: error.message });
     const detail = error as { statusCode?: number; code?: string };
     if (detail.statusCode === 413 || detail.code?.includes('LIMIT')) return reply.code(413).send({ message: 'Choose one photo under 10 MB.' });
     if (detail.code === 'ENOENT') return reply.code(404).send({ message: 'This image is no longer available. Create a fresh Dad.' });
-    return reply.code(500).send({ message: 'Dad’s paperwork got stuck. Your completed faces are saved; try again.' });
+    if (detail.statusCode === 400) return reply.code(400).send({ message: 'That request was not valid. Please retry from the game.' });
+    return reply.code(500).send({ message: request.url.startsWith('/api/rooms') ? 'The room could not update. Reconnect to continue.' : 'Dad’s paperwork got stuck. Your completed faces are saved; try again.' });
   });
-  app.addHook('onClose', async () => { clearInterval(cleanup); await jobs.close(); });
-  return { app, jobs };
+  app.addHook('onClose', async () => { clearInterval(cleanup); rooms.close(); await jobs.close(); });
+  return { app, jobs, rooms };
 }

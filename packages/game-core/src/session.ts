@@ -6,7 +6,7 @@ import { createFatherProfile, createTimeMachineCase } from './cases.ts';
 import { isDadExposed } from './peeking.ts';
 import type { ActionResult, Activity, CharacterPack, HuntSession, HuntSnapshot, Point, Target } from './types.ts';
 
-export const ROUND_MS = 3 * 60 * 1000;
+export const ROUND_MS = 2 * 60 * 1000;
 export const EXPIRY_MS = 60 * 60 * 1000;
 export const SEARCH_MS = 1000;
 export const HINT_MS = 20 * 1000;
@@ -29,6 +29,9 @@ export function freshHuntSeed(previous: string | undefined, entropy: string): st
   return seed;
 }
 
+export interface HuntCheckpoint { snapshot: HuntSnapshot; lastHintAt: number | null }
+export interface HuntOptions { id?: string; playerId?: string; expiresAt?: number; targets?: Target[] }
+
 export class LocalHuntSession implements HuntSession {
   private state: HuntSnapshot;
   private listeners = new Set<() => void>();
@@ -36,20 +39,31 @@ export class LocalHuntSession implements HuntSession {
   private lastSecond = -1;
   private lastHintAt = -Infinity;
   private clock: () => number;
-  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true, father: CharacterPack = createFatherProfile('Balaji')) {
+  private hardExpiry?: number;
+  constructor(name: string, seed: string, clock: () => number = Date.now, autoStart = true, father: CharacterPack = createFatherProfile('Balaji'), options: HuntOptions = {}) {
     this.clock = clock;
+    this.hardExpiry = options.expiresAt;
     const now = clock();
     const playerName = name.trim().slice(0, 24) || 'Detective';
     const profile = createFatherProfile(father.name, father);
-    this.state = { id: `solo-${seed}`, seed, father: profile, case: createTimeMachineCase(profile.name, playerName), status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, now, lastCatchAt: now,
-      player: { id: 'hunter-1', name: playerName, position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
-      targets: placeTargets(seed), opened: [], spotted: [], search: null, activity: [] };
+    this.state = { id: options.id ?? `solo-${seed}`, seed, father: profile, case: createTimeMachineCase(profile.name, playerName), status: autoStart ? 'playing' : 'ready', finishReason: null, startedAt: now, endsAt: now + ROUND_MS, expiresAt: options.expiresAt ?? now + EXPIRY_MS, now, lastCatchAt: now,
+      player: { id: options.playerId ?? 'hunter-1', name: playerName, position: { ...HOUSE.spawn }, roomId: 'hall', score: 0 },
+      targets: structuredClone(options.targets ?? placeTargets(seed)), opened: [], spotted: [], search: null, activity: [] };
+  }
+  checkpoint(): HuntCheckpoint { return { snapshot: structuredClone(this.state), lastHintAt: Number.isFinite(this.lastHintAt) ? this.lastHintAt : null }; }
+  static restore(saved: HuntCheckpoint, clock: () => number = Date.now): LocalHuntSession {
+    const s = saved.snapshot;
+    const session = new LocalHuntSession(s.player.name, s.seed, clock, false, s.father);
+    session.state = structuredClone(s); session.hardExpiry = s.expiresAt;
+    session.lastHintAt = saved.lastHintAt ?? -Infinity;
+    session.sequence = Math.max(0, ...s.activity.map(a => a.id)) + 1;
+    return session;
   }
   getSnapshot = () => this.state;
   start() {
     if (this.state.status !== 'ready') return;
     const now = this.clock();
-    this.state = { ...this.state, status: 'playing', startedAt: now, endsAt: now + ROUND_MS, expiresAt: now + EXPIRY_MS, lastCatchAt: now, now };
+    this.state = { ...this.state, status: 'playing', startedAt: now, endsAt: now + ROUND_MS, expiresAt: this.hardExpiry ?? now + EXPIRY_MS, lastCatchAt: now, now };
     this.emit();
   }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };

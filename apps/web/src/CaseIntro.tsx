@@ -45,7 +45,7 @@ function Lab({ father, time, step, fallback }: { father: CharacterPack; time: nu
 }
 
 function Dispatch() {
-  return <div className="dispatch-tableau" aria-hidden="true"><div className="dispatch-seal"><span>GOVERNMENT OF</span><b>✳</b><span>ABSOLUTE NONSENSE</span></div><div className="dispatch-detective" /><div className="dispatch-equipment"><ShoppingBag /><span>1 STICK. 1 SACK.<br />BACKUP: LOL.</span></div><div className="dispatch-stamp">CONTAIN THIS<br /><strong>SHITSHOW</strong></div><div className="dispatch-deadline">03:00<span>THEN IT’S THE NEXT SHIFT’S PROBLEM.</span></div></div>;
+  return <div className="dispatch-tableau" aria-hidden="true"><div className="dispatch-seal"><span>GOVERNMENT OF</span><b>✳</b><span>ABSOLUTE NONSENSE</span></div><div className="dispatch-detective" /><div className="dispatch-equipment"><ShoppingBag /><span>1 STICK. 1 SACK.<br />BACKUP: LOL.</span></div><div className="dispatch-stamp">CONTAIN THIS<br /><strong>SHITSHOW</strong></div><div className="dispatch-deadline">02:00<span>THEN IT’S THE NEXT SHIFT’S PROBLEM.</span></div></div>;
 }
 
 export function CaseIntro({ story, father, ready, error, sound, reducedMotion, toggleSound, toggleMotion, onStart, onLeave }: Props) {
@@ -89,7 +89,7 @@ export function CaseIntro({ story, father, ready, error, sound, reducedMotion, t
       <span className="intro-scene-number">0{step + 1} / 05</span>
     </div>
     <div className="intro-content"><div className="intro-story" aria-live="polite" aria-atomic="true"><span className="eyebrow">{beat.kicker}</span><h2 id="intro-title">{beat.title}</h2><p id="intro-story">{beat.text}</p></div>
-      {final && <div className="intro-mission"><ShoppingBag size={23} /><span><strong>Tap to walk. Check furniture. Tap dads to bag.</strong><small>Five rooms. Three minutes. No dignity.</small></span></div>}
+      {final && <div className="intro-mission"><ShoppingBag size={23} /><span><strong>Tap to walk. Check furniture. Tap dads to bag.</strong><small>Five rooms. Two minutes. No dignity.</small></span></div>}
       {error && <p className="intro-error" role="alert">{error}</p>}
       <div className="intro-actions">
         {error ? <button className="button primary" onClick={() => location.reload()}>Reload the house</button> : <button data-autofocus className="button primary" disabled={final && !ready} onClick={final ? start : () => setClock(STARTS[step + 1])}>{final ? ready ? 'Grab the sack. Start hunt.' : 'Preparing the house…' : 'Next scene'}<ArrowRight size={18} /></button>}

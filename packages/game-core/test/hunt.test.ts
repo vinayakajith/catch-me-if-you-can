@@ -105,8 +105,8 @@ test('walking away cancels a search; parallel searches cannot bypass duration; e
   assert.equal(f.session.getSnapshot().activity[0].text, 'Checked. Empty.'); assert.equal(f.session.getSnapshot().player.score, 0);
 });
 
-test('three minutes is exact, with catches rejected at the boundary without a timer callback', () => {
-  assert.equal(ROUND_MS, 180000);
+test('two minutes is exact, with catches rejected at the boundary without a timer callback', () => {
+  assert.equal(ROUND_MS, 120000);
   const f = fixture(), slot = HOUSE.slots.find(s => s.kind === 'statue')!, id = targetAt(f.session, slot.id).id;
   walkTo(f.session, slot.anchor); f.setTime(f.session.getSnapshot().endsAt - 1); assert.equal(f.session.spot(id).ok, true);
   f.setTime(f.session.getSnapshot().endsAt); assert.equal(f.session.catch(id).ok, false);
@@ -150,7 +150,7 @@ test('large frame delays, NaN and diagonal movement cannot teleport through wall
 test('loading and intro consume no time; start cannot reset a running deadline', () => {
   let now = 1000; const session = new LocalHuntSession('Alan', 'loading', () => now, false);
   now += 90_000; session.tick(); assert.equal(session.getSnapshot().status, 'ready');
-  session.start(); assert.equal(session.getSnapshot().endsAt - now, 180000);
+  session.start(); assert.equal(session.getSnapshot().endsAt - now, 120000);
   const endsAt = session.getSnapshot().endsAt; now += 9000; session.start(); assert.equal(session.getSnapshot().endsAt, endsAt);
 });
 

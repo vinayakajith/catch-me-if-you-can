@@ -6,3 +6,4 @@ export * from './cases.ts';
 export * from './peeking.ts';
 export * from './broom.ts';
 export * from './characters.ts';
+export * from './multiplayer.ts';
