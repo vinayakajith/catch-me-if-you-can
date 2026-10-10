@@ -61,8 +61,8 @@ export class HouseScene extends Phaser.Scene {
     this.load.svg('sack', svgUri(sackSvg), { width: 160 * density, height: 160 * density });
     for (const kind of new Set(HOUSE.props.map(s => s.kind))) {
       for (const open of [false, true]) {
-        this.load.svg(`${kind}${open ? '-open' : ''}`, svgUri(hideoutSvg(kind, open)), { width: 160 * density, height: 160 * density });
-        this.load.svg(`${kind}-front${open ? '-open' : ''}`, svgUri(hideoutSvg(kind, open, true)), { width: 160 * density, height: 160 * density });
+        this.load.svg(`${kind}${open ? '-open' : ''}`, svgUri(hideoutSvg(kind, open, false, this.bridge.session.getSnapshot().father.name)), { width: 160 * density, height: 160 * density });
+        this.load.svg(`${kind}-front${open ? '-open' : ''}`, svgUri(hideoutSvg(kind, open, true, this.bridge.session.getSnapshot().father.name)), { width: 160 * density, height: 160 * density });
       }
     }
     this.load.on('loaderror', () => { this.loaded = false; this.bridge.failed('The house art could not load. Please reload and try again.'); });

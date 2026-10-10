@@ -51,7 +51,7 @@ export const svgUri = (source: string) => `data:image/svg+xml;base64,${btoa(Stri
 
 // Hideouts have a back and a transparent foreground. Balaji sits between them.
 // Keep all layers in the same 160px coordinate system so the rim really overlaps him.
-export function hideoutSvg(kind: PropKind, open: boolean, foreground = false): string {
+export function hideoutSvg(kind: PropKind, open: boolean, foreground = false, name = 'Balaji'): string {
   let back = '', front = '';
   const dark = '#605a47', cream = '#f0dfb8';
   switch (kind) {
@@ -69,7 +69,7 @@ export function hideoutSvg(kind: PropKind, open: boolean, foreground = false): s
       front = rect(23, 26, 114, 52, '#89aa93', 23) + `<path d="M48 34v34m32-34v34m31-34v34" stroke="#4f796d"/>` + ellipse(27, 51, 14, 26, '#bdd0b2'); break;
     case 'statue':
       back = ellipse(80, 137, 69, 16, '#b4a16d') + rect(22, 119, 116, 25, '#d8c494', 3) + rect(34, 105, 91, 21, '#eee1b6', 3);
-      front = rect(22, 134, 116, 12, '#ab905f', 2) + rect(55, 123, 52, 15, '#8d7752', 2) + `<text x="81" y="134" text-anchor="middle" stroke="none" fill="#f5e6b8" font-family="serif" font-size="8">NOT A DAD</text>`; break;
+      front = rect(22, 134, 116, 12, '#ab905f', 2) + rect(39, 123, 84, 15, '#8d7752', 2) + `<text x="81" y="134" text-anchor="middle" stroke="none" fill="#f5e6b8" font-family="serif" font-size="8" textLength="${Math.min(76, (name.length + 4) * 4.5)}" lengthAdjust="spacingAndGlyphs">NOT ${name.toUpperCase().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</text>`; break;
     case 'microwave':
       back = rect(4, 29, 152, 115, '#a6b1a0', 9) + rect(11, 41, 112, 85, '#465850', 4) + rect(19, 51, 94, 57, '#626251', 2) + ellipse(67, 108, 42, 7, '#c5c4a4') + rect(130, 46, 18, 20, '#506b56', 2) + ellipse(138, 86, 6, 6, '#e0bd73') + ellipse(138, 108, 6, 6, '#bf7858');
       front = `<path d="M11 41h112v85H11zM19 51v57h94V51z" fill="#6f8075" fill-rule="evenodd"/>` + (open ? `<path d="M9 45L0 35V127L9 120" fill="#bfd0b8"/>` : rect(19, 51, 94, 57, '#91c7bd22', 2) + `<path d="M23 57L77 101M54 54L108 95" stroke="#e6f4db" stroke-width="3" opacity=".2"/>` + rect(115, 62, 6, 35, '#d8d0aa', 2)); break;

@@ -2,7 +2,7 @@ import { chromium, devices } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { HOUSE, placeTargets } from '../packages/game-core/src/index.ts';
+import { HOUSE, placeTargets, peekProgress } from '../packages/game-core/src/index.ts';
 
 const fixtureSeed = Array.from({ length: 1000 }, (_, i) => `browser-${i}`).find(seed => placeTargets(seed).length === 12 && placeTargets(seed).some(t => t.kind === 'hidden' && t.slotId === 'bathroom-toilet'));
 const baseURL = process.env.FATHER_HUNTER_URL || 'http://127.0.0.1:5173';
@@ -142,6 +142,15 @@ async function finishHunt(page, mobile = false) {
       await page.waitForFunction(id => window.__huntTest.session.getSnapshot().opened.includes(id), slot.id);
     } else await page.waitForFunction(id => { const dad = window.__huntTest.scene.dads.get(id); return dad?.visible && dad.alpha > .95; }, target.id);
     await page.screenshot({ path: new URL(`${mobile ? 'mobile' : 'desktop'}-${slot.id}.png`, artifacts).pathname });
+    // Screenshot encoding can outlast a peek. Tap during a fresh visible window,
+    // as a player would, instead of blindly tapping where the face used to be.
+    if (slot.mode === 'peek') {
+      const started = Date.now();
+      while (peekProgress(before.seed, slot, Date.now() - before.startedAt) < .95 || peekProgress(before.seed, slot, Date.now() - before.startedAt + 500) < .95) {
+        assert.ok(Date.now() - started < 10000, 'Peeking face returns within ten seconds');
+        await page.waitForTimeout(50);
+      }
+    }
     await tapWorld(page, await page.evaluate(id => window.__huntTest.face(id), target.id), mobile);
     await page.waitForFunction(id => window.__huntTest.session.getSnapshot().targets.some(t => t.id === id && t.claimedBy), target.id);
     const score = await page.evaluate(() => window.__huntTest.session.getSnapshot().player.score);
@@ -298,7 +307,7 @@ try {
   assert.ok(after > before, 'Touch joystick moves the hunter');
   await phone.getByRole('button', { name: 'How to play' }).tap();
   await phone.getByRole('heading', { name: 'Just tap. Be curious.' }).waitFor();
-  await phone.getByRole('button', { name: /Got it. Where’s dad/ }).tap();
+  await phone.getByRole('button', { name: /Got it. Where’s Chandrashekhar Subramanian/ }).tap();
   await phone.setViewportSize({ width: 844, height: 390 });
   await phone.waitForTimeout(350);
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Landscape fits');
@@ -315,6 +324,7 @@ try {
   if (errors.length) console.error('Browser errors:', errors);
   for (const [i, page] of (browser?.contexts().flatMap(context => context.pages()) ?? []).entries()) {
     await page.screenshot({ path: new URL(`failure-${i}.png`, artifacts).pathname }).catch(() => {});
+    console.error(await page.evaluate(() => { const state = window.__huntTest?.session.getSnapshot(); return state ? { status: state.status, score: state.player.score, remaining: state.endsAt - state.now, position: state.player.position, lastActivity: state.activity[0] } : { screen: location.pathname }; }).catch(() => ({})));
   }
   throw error;
 } finally {

@@ -63,6 +63,7 @@ try {
     await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing');
     const remaining = await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - window.__huntTest.session.time());
     assert.ok(remaining > 117000 && remaining <= 120000, `Full two-minute window: ${remaining}`);
+    assert.equal(await page.title(), 'Father Hunter — The Suresh incident');
     assert.match(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.atlas), /\/api\/rooms\/.*\/assets\/atlas.png$/, 'Every player loads the host’s personal character');
   }));
   console.log('PASS personal room creation survives lost reply; five browsers load the shared character; sixth rejected; timers start after intro');
@@ -84,7 +85,10 @@ try {
   const confirmed = await (await host.request.get(`${base}${path.replace('/r/', '/api/rooms/')}/state`)).json();
   assert.equal(confirmed.cursor, 5, 'Retries create no duplicate catch events or points');
   await host.waitForFunction(() => [...document.querySelectorAll('.case-file .standing-score')].length === 5 && [...document.querySelectorAll('.case-file .standing-score')].every(el => el.textContent === '1'));
-  for (const page of pages) await page.locator('.live-catch').waitFor({ timeout: 8000 });
+  await Promise.all(pages.map(async page => {
+    await page.locator('.live-catch').waitFor({ timeout: 8000 });
+    assert.equal(await page.locator('.coach').isVisible(), false, 'Friend notices do not overlap the guidance tip');
+  }));
   for (const i of [1, 3]) assert.equal(await pages[i].getByRole('region', { name: 'Leaderboard', exact: true }).isVisible(), false, 'Mobile board hidden during hunt');
   await host.screenshot({ path: join(artifacts, 'multiplayer-desktop.png') });
   await pages[1].screenshot({ path: join(artifacts, 'multiplayer-mobile.png') });
@@ -110,8 +114,27 @@ try {
   assert.equal(await pages[1].evaluate(() => window.__huntTest.session.getSnapshot().player.score), 1);
   await pages[1].setViewportSize({ width: 844, height: 390 });
   assert.equal(await pages[1].getByRole('region', { name: 'Leaderboard', exact: true }).isVisible(), false, 'Mobile landscape also hides the board');
+  const landscape = await pages[1].evaluate(() => ({ play: document.querySelector('.play-area').getBoundingClientRect().width, layout: document.querySelector('.hunt-layout').getBoundingClientRect().width }));
+  assert.ok(landscape.play >= landscape.layout - 2, 'Landscape uses the available house width');
+  await pages[1].getByRole('button', { name: 'Open house map', exact: true }).click();
+  await pages[1].getByRole('button', { name: 'Walk to Bathroom', exact: true }).waitFor();
+  assert.equal(await pages[1].getByRole('region', { name: 'Leaderboard', exact: true }).isVisible(), false, 'Mobile map drawer also hides the board');
+  await pages[1].getByRole('button', { name: 'Close map', exact: true }).last().click();
+  await pages[1].screenshot({ path: join(artifacts, 'multiplayer-mobile-landscape.png') });
   await pages[1].setViewportSize({ width: 390, height: 844 });
   console.log('PASS lost catch reply awards once; disconnect freezes controls and reconnect preserves score and deadline');
+  if (smoke) {
+    const offline = pages[1]; await contexts[1].setOffline(true);
+    await offline.evaluate(() => { void window.__huntTest.session.hint(); });
+    await offline.waitForFunction(() => window.__huntTest.session.getSnapshot().connection === 'reconnecting');
+    const untilEnd = await offline.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - window.__huntTest.session.time() + 20);
+    await offline.clock.install(); offset += untilEnd; await offline.clock.fastForward(untilEnd);
+    await offline.waitForFunction(() => window.__huntTest.session.getSnapshot().status === 'finished');
+    assert.equal(await offline.locator('.result-card').count(), 0, 'Unconfirmed actions remain pending while offline');
+    await offline.getByRole('button', { name: 'Leave hunt', exact: true }).click();
+    await offline.locator('.room-actions .invite').waitFor();
+    console.log('PASS an offline deadline with an unconfirmed action still allows returning to the case');
+  }
   if (!smoke) {
     const last = pages[4];
     const snapshot = await last.evaluate(() => window.__huntTest.session.getSnapshot());

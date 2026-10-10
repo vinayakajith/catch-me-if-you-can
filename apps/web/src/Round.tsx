@@ -7,11 +7,13 @@ import { CaseIntro } from './CaseIntro';
 import type { GameBridge } from './game/HouseScene';
 import { playSound, unlockSound } from './sound';
 import { Leaderboard } from './Leaderboard';
+import { useCaseTitle } from './useCaseTitle';
 export interface Preferences { sound: boolean; reducedMotion: boolean }
 
 export function Round({ name, seed, father, preferences, togglePreference, onLeave, onReplay, session: suppliedSession, resumed = false, room: multiplayerRoom }: { name: string; seed: string; father: CharacterPack; preferences: Preferences; togglePreference: (key: keyof Preferences) => void; onLeave: () => void; onReplay: () => void; session?: HuntSession; resumed?: boolean; room?: RoomView }) {
   const [session] = useState(() => suppliedSession ?? new LocalHuntSession(name, seed, Date.now, false, father));
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  useCaseTitle(father.name);
   const story = state.case;
   const [ready, setReady] = useState(false), [error, setError] = useState('');
   const [accepted, setAccepted] = useState(resumed), [bagged, setBagged] = useState(session.getSnapshot().player.score);
@@ -74,7 +76,7 @@ export function Round({ name, seed, father, preferences, togglePreference, onLea
       <button className="icon-button" aria-label={preferences.sound ? 'Mute sound' : 'Enable sound'} aria-pressed={preferences.sound} onClick={() => { unlockSound(); togglePreference('sound'); }}>{preferences.sound ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
       <button className="icon-button motion-button" aria-label="Reduce animation" aria-pressed={preferences.reducedMotion} onClick={() => togglePreference('reducedMotion')}><Waves size={19} /></button>
       <button className="icon-button" aria-label="How to play" onClick={() => setHelp(true)}><HelpCircle size={19} /></button>
-      <button className="icon-button leave-button" aria-label="Leave hunt" onClick={() => setLeaving(true)}><X size={19} /></button>
+      <button className="icon-button leave-button" aria-label="Leave hunt" onClick={() => ended ? onLeave() : setLeaving(true)}><X size={19} /></button>
     </div></header>
     <main className="hunt-main" inert={!accepted}>
       <div className="hunt-topline"><div><span className="eyebrow">OPERATION: FIND {father.name.toUpperCase()}</span><h1>He’s in here. <em>Somewhere.</em></h1></div><p>Check the obvious. Then check the embarrassing.</p></div>
@@ -84,10 +86,10 @@ export function Round({ name, seed, father, preferences, togglePreference, onLea
           <div className="game-frame">
             <GameCanvas bridge={bridge} />
             {catchNotice && !ended && <div className="live-catch" role="status">{catchNotice}</div>}
-            {state.connection && state.connection !== 'online' && <div className="connection-note" role="status">{state.connectionMessage}{state.connection === 'replaced' && <button onClick={onLeave}>Return to the case to resume here</button>}</div>}
+            {state.connection && state.connection !== 'online' && <div className="connection-note" role="status">{state.connectionMessage}{(state.connection === 'replaced' || ended) && <button onClick={onLeave}>{ended ? 'Back to the case' : 'Return to the case to resume here'}</button>}</div>}
             <div className="room-chip"><Home size={15} /><span>{room.name}</span></div>
             {!ready && <div className="game-loading"><Dad character={father} expression={1} /><h2>{error ? 'A little technical hiccup.' : 'Checking under the furniture…'}</h2><p>{error || `${father.name} is finding some deeply questionable hiding spots.`}</p>{error && <button className="button primary" onClick={() => location.reload()}>Try again</button>}</div>}
-            {ready && accepted && !coachDismissed && !ended && <div className={`coach ${state.player.roomId === 'hall' && state.player.score === 0 ? 'opening-coach' : ''}`}><Sparkles size={17} /><p>{coach}</p><button className="icon-button" aria-label="Dismiss guidance" onClick={() => setCoachDismissed(true)}><X size={15} /></button></div>}
+            {ready && accepted && !coachDismissed && !ended && !catchNotice && (!state.connection || state.connection === 'online') && <div className={`coach ${state.player.roomId === 'hall' && state.player.score === 0 ? 'opening-coach' : ''}`}><Sparkles size={17} /><p>{coach}</p><button className="icon-button" aria-label="Dismiss guidance" onClick={() => setCoachDismissed(true)}><X size={15} /></button></div>}
             {toast && !ended && <div className="toast" role="status">{toast}</div>}
             {ready && accepted && !ended && <><Joystick onMove={point => { bridge.movement = point; }} /><button className="inspect-button" aria-label="Check nearby furniture" onClick={() => bridge.inspect?.()}><Search size={22} /><span>CHECK</span></button></>}
           </div>

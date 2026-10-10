@@ -6,11 +6,13 @@ import { RoomClient, roomConfig } from './room-api';
 import { NetworkHuntSession } from './network-session';
 import { Round, type Preferences } from './Round';
 import { Leaderboard } from './Leaderboard';
+import { useCaseTitle } from './useCaseTitle';
 import './rooms.css';
 
 export function RoomPage({ id, preferences, togglePreference, onHome }: { id: string; preferences: Preferences; togglePreference(key: keyof Preferences): void; onHome(): void }) {
   const [client] = useState(() => new RoomClient(id));
   const { view, error: connectionError } = useSyncExternalStore(client.subscribe, client.getSnapshot);
+  useCaseTitle(view?.room.fatherName);
   const [name, setName] = useState(() => { try { return localStorage.getItem('fh-name') ?? ''; } catch { return ''; } });
   const [run, setRun] = useState<NetworkHuntSession | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [share, setShare] = useState({ url: `${location.origin}/r/${id}`, lan: !['localhost', '127.0.0.1'].includes(location.hostname) }), [copied, setCopied] = useState(false);

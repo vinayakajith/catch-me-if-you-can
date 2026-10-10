@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, LoaderCircle, RotateCcw, ShoppingBag, Spa
 import { DEFAULT_SKIN, EXPRESSIONS, type CharacterJobView, type CharacterPack, type CharacterServiceConfig, type Expression } from '@father-hunter/game-core';
 import { Brand, Dad } from './components';
 import { FatherArt } from './FatherArt';
+import { useCaseTitle } from './useCaseTitle';
 import { PhotoCrop, type CropHandle } from './PhotoCrop';
 import { CharacterApiError, characterAction, characterConfig, createCharacterJob, getCharacterJob, pendingCharacterUpload, recoverCharacterUpload, rememberCharacterJob, savedCharacterJob, uploadKey } from './character-api';
 import { hideoutSvg, sackSvg, svgUri } from './game/art';
@@ -137,6 +138,7 @@ export function CharacterCreator({ initialName, fresh = false, onReady, onClose,
   const complete = job?.completed.length === 6, finalPreview = complete && !working;
   const step = !job || (!job.baseApproved && !base) ? 0 : base ? 1 : 2;
   const displayName = name.trim() || initialName || 'Balaji';
+  useCaseTitle(displayName);
   return <div className="character-lab">
     <header className="lab-header"><Brand onClick={onClose} /><button type="button" className="text-button" onClick={onClose}><ArrowLeft size={17} /> Back to the hunt</button></header>
     <main className="lab-main">

@@ -9,6 +9,7 @@ import { Round, type Preferences } from './Round';
 import { RoomPage } from './RoomPage';
 import { createRoom } from './room-api';
 import { personalCopy } from './personal-copy';
+import { useCaseTitle } from './useCaseTitle';
 
 function stored(key: string, fallback: string) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
 function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* Private browsing still works. */ } }
@@ -43,6 +44,7 @@ function Landing({ onStart, onRoom }: { onStart: (name: string, father: Characte
   const [fatherName, setFatherName] = useState(() => stored('fh-father-name', 'Balaji'));
   const [selected, setSelected] = useState<CharacterPack | null>(null), [creating, setCreating] = useState(false), [resume, setResume] = useState(Boolean(savedCharacterJob() || pendingCharacterUpload())), [photoError, setPhotoError] = useState('');
   const father = selected ? createFatherProfile(fatherName, selected) : createFatherProfile(fatherName);
+  useCaseTitle(father.name);
   useEffect(() => {
     const id = savedCharacterJob(), pending = pendingCharacterUpload(); if (!id && !pending) return;
     let alive = true;
