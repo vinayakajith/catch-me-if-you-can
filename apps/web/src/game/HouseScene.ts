@@ -172,6 +172,12 @@ export class HouseScene extends Phaser.Scene {
         else g.lineBetween(p.x, p.y + p.h / 2, p.x + p.w, p.y + p.h / 2);
       }
     }
+    // Floors and walls never change. Rasterize once at the device density;
+    // replaying thousands of geometry commands each frame stalls slow GPUs.
+    const density = this.bridge.pixelRatio ?? 1;
+    g.setScale(density).generateTexture('house-floor', HOUSE.width * density, HOUSE.height * density);
+    g.destroy();
+    this.add.image(0, 0, 'house-floor').setOrigin(0).setDisplaySize(HOUSE.width, HOUSE.height).setDepth(0);
     this.add.text(748, 157, '← LIVING\n\nKITCHEN →', { resolution: this.bridge.pixelRatio ?? 1, fontFamily: 'Arial', fontSize: '13px', color: '#6f765d', align: 'center', lineSpacing: 4 }).setOrigin(.5).setDepth(4);
     for (const [x, label] of [[270, '↓ BEDROOM'], [760, '↓ BATHROOM'], [1240, '↓ STOREROOM']] as const) {
       this.add.text(x, 585, label, { resolution: this.bridge.pixelRatio ?? 1, fontFamily: 'Arial', fontSize: '12px', color: '#817554', letterSpacing: 1 }).setOrigin(.5).setDepth(4);
@@ -204,12 +210,20 @@ export class HouseScene extends Phaser.Scene {
       const centre = this.targetPoint(target.id), size = Math.max(64, 48 * (this.bridge.pixelRatio ?? 1) / this.cameras.main.zoom);
       if (contains({ x: centre.x - size / 2, y: centre.y - size / 2, w: size, h: size }, point)) {
         if (slot?.behavior === 'statue') { this.walkTo(slot.anchor, { type: 'catch', targetId: target.id }); return; }
-        this.acting = true;
-        const result = await this.bridge.session.spot(target.id);
-        this.acting = false;
+        // Start approaching as soon as the player taps. The ordered command
+        // queue still confirms spotting before any catch can award a point.
+        const spotted = this.bridge.session.spot(target.id);
+        this.walkTo(ground, { type: 'catch', targetId: target.id });
+        const result = await spotted;
         if (!this.scene.isActive()) return;
-        if (result.ok) this.walkTo(ground, { type: 'catch', targetId: target.id });
-        else this.bridge.feedback(result);
+        const stillApproaching = this.pending?.type === 'catch' && this.pending.targetId === target.id;
+        if (!result.ok) {
+          if (stillApproaching) { this.route = []; this.pending = undefined; }
+          this.bridge.feedback(result);
+        } else if (stillApproaching && target.kind === 'broom') {
+          const confirmed = this.bridge.session.getSnapshot().targets.find(t => t.id === target.id)!;
+          if (confirmed.kind === 'broom') this.walkTo(broomPosition(confirmed, this.bridge.session.time() - state.startedAt), { type: 'catch', targetId: target.id });
+        }
         return;
       }
     }

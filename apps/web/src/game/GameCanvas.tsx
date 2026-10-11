@@ -11,7 +11,9 @@ export function GameCanvas({ bridge }: { bridge: GameBridge }) {
       if (cancelled || !parent.current) return;
       const node = parent.current;
       const density = Math.max(1, Math.min(2, window.devicePixelRatio || 1)); bridge.pixelRatio = density;
-      game = new Phaser.Game({ type: Phaser.AUTO, parent: node, width: Math.round(node.clientWidth * density), height: Math.round(node.clientHeight * density),
+      // This scene uses ordinary 2D sprites. Canvas avoids software WebGL
+      // stalls on low-power devices while preserving the same retina artwork.
+      game = new Phaser.Game({ type: Phaser.CANVAS, parent: node, width: Math.round(node.clientWidth * density), height: Math.round(node.clientHeight * density),
         backgroundColor: '#29493d', antialias: true, roundPixels: false,
         scene: new HouseScene(bridge), input: { activePointers: 3, keyboard: true },
         scale: { mode: Phaser.Scale.NONE, zoom: 1 / density, autoCenter: Phaser.Scale.CENTER_BOTH },
