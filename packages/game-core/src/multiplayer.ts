@@ -19,14 +19,19 @@ export function placementMix(targets: Target[]): PlacementMix {
 // Every attempt has the room's cast size and exposure mix, but its own copies.
 export function balancedTargets(seed: string, mix: PlacementMix, previous = ''): Target[] {
   const rng = random(seed), statue = HOUSE.slots.find(s => s.kind === 'statue')!;
+  const pools = (['visible', 'search', 'peek'] as const).map(mode => ({
+    slots: HOUSE.slots.filter(s => s.mode === mode && s !== statue),
+    count: mix[mode] - (mode === 'visible' ? 1 : 0),
+  }));
+  // Some dense mixes fill every eligible slot. They have no alternative
+  // layout; replay must still work, with fresh claims and a new broom route.
+  const canReshuffle = pools.some(pool => pool.count > 0 && pool.count < pool.slots.length);
   for (let attempt = 0; attempt < 2048; attempt++) {
     const chosen = [statue];
-    for (const mode of ['visible', 'search', 'peek'] as const) {
-      chosen.push(...shuffled(HOUSE.slots.filter(s => s.mode === mode && s !== statue), rng).slice(0, mix[mode] - (mode === 'visible' ? 1 : 0)));
-    }
+    for (const pool of pools) chosen.push(...shuffled(pool.slots, rng).slice(0, pool.count));
     if (new Set(chosen.map(s => s.roomId)).size !== 5) continue;
     const targets: Target[] = chosen.map((slot, i) => ({ kind: 'hidden', id: `dad-${i + 1}`, slotId: slot.id, claimedBy: null, claimedAt: null }));
-    if (targetSignature(targets) === previous) continue;
+    if (canReshuffle && targetSignature(targets) === previous) continue;
     targets.push({ kind: 'broom', id: 'broom-dad', route: createBroomRoute(seed, ROUND_MS), lockedPosition: null, claimedBy: null, claimedAt: null });
     return targets;
   }

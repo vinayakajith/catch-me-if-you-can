@@ -15,6 +15,17 @@ test('balanced retries retain cast size and exposure mix, cover every room, and 
   }
 });
 
+test('a full exposure mix can replay when there is only one possible hiding layout', () => {
+  const mix = { visible: 1, peek: 7, search: 10 };
+  const first = balancedTargets('packed-house', mix);
+  const replay = balancedTargets('packed-house-replay', mix, targetSignature(first));
+  assert.deepEqual(placementMix(replay), mix, 'Replay preserves the room’s difficulty');
+  assert.equal(replay.length, first.length);
+  assert.equal(targetSignature(replay), targetSignature(first), 'Every eligible hiding place is already occupied');
+  assert.notDeepEqual(replay.find(t => t.kind === 'broom'), first.find(t => t.kind === 'broom'), 'The broom still gets a fresh route');
+  assert.ok(replay.every(t => t.claimedBy === null));
+});
+
 test('network spotting accepts a recently visible face, but never extends the attempt deadline', () => {
   let now = 10_000;
   const session = new LocalHuntSession('Alan', 'peek-latency', () => now);
