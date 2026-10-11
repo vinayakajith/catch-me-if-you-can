@@ -59,10 +59,16 @@ try {
   const sixth = await browser.newPage(); await sixth.goto(`${base}${path}`); await sixth.getByRole('button', { name: 'All five seats are taken', exact: true }).waitFor(); await sixth.close();
   await Promise.all(pages.map(async page => {
     await page.getByRole('button', { name: 'Enter the house', exact: true }).click();
+    await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).waitFor();
+    const beforeStart = await (await page.request.get(`${base}${path.replace('/r/', '/api/rooms/')}/state`)).json();
+    assert.equal(beforeStart.attempt, null, 'The intro does not start a server attempt');
+    const startRequestedAt = Date.now() + offset;
     await page.getByRole('button', { name: 'Skip intro & hunt', exact: true }).click();
     await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().status === 'playing');
-    const remaining = await page.evaluate(() => window.__huntTest.session.getSnapshot().endsAt - window.__huntTest.session.time());
-    assert.ok(remaining > 117000 && remaining <= 120000, `Full two-minute window: ${remaining}`);
+    const { startedAt, endsAt } = await page.evaluate(() => window.__huntTest.session.getSnapshot());
+    assert.ok(startedAt >= startRequestedAt, 'The timer starts only after leaving the intro');
+    // Renderer scheduling can delay this observation; compare the actual window.
+    assert.equal(endsAt - startedAt, 120000, 'Every player receives a full two-minute attempt');
     assert.equal(await page.title(), 'Catch Me If You Can — The Suresh incident');
     assert.match(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.atlas), /\/api\/rooms\/.*\/assets\/atlas.png$/, 'Every player loads the host’s personal character');
   }));
