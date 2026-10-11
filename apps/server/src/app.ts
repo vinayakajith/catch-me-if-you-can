@@ -12,6 +12,7 @@ import { Rooms, registerRooms } from './rooms.ts';
 import { registerSecurity, publicOrigin, type RateLimiter } from './security.ts';
 import { SharedRooms } from './shared-rooms.ts';
 import { MemorySocketStore, Realtime, attachLocalSockets, registerShared, type SocketStore } from './realtime.ts';
+import { portraitScope, registerPortraits } from './portraits.ts';
 
 function owner(token?: string) { return createHash('sha256').update(token ?? '').digest('hex'); }
 function validName(value: unknown) {
@@ -27,12 +28,12 @@ export async function buildApp<T extends CharacterService = CharacterJobs>(optio
   await app.register(cookie);
   const canonicalOrigin = publicOrigin(options.publicOrigin);
   registerSecurity(app, { ...options, publicOrigin: canonicalOrigin });
-  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 1, parts: 2 } });
+  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2, parts: 3 } });
   const assets = options.assets ?? new DiskAssetStore(options.directory);
-  const jobs = (options.jobs ?? new CharacterJobs({ ...options, store: new SqliteJobStore(options.directory), assets })) as T;
+  const roomStore = options.roomStore ?? new SqliteRoomStore(options.directory), shared = new SharedRooms(roomStore, options.clock);
+  const jobs = (options.jobs ?? new CharacterJobs({ ...options, store: new SqliteJobStore(options.directory), assets, onPlayerReady: job => shared.publishAvatar(job.playerRoomId!, job.owner, job.id) })) as T;
   await jobs.initialize();
-  const roomStore = options.roomStore ?? new SqliteRoomStore(options.directory);
-  const rooms = new Rooms(roomStore, assets, jobs, options.clock), shared = new SharedRooms(roomStore, options.clock);
+  const rooms = new Rooms(roomStore, assets, jobs, options.clock);
   const socketStore = options.socketStore ?? new MemorySocketStore();
   const realtime = options.socketEndpoint ? new Realtime(shared, socketStore, async () => {}) : attachLocalSockets(app, shared, socketStore, options.limiter);
   if (options.background !== false) await rooms.cleanup();
@@ -52,15 +53,17 @@ export async function buildApp<T extends CharacterService = CharacterJobs>(optio
   app.post('/api/characters', async (request, reply) => {
     const key = request.headers['idempotency-key'];
     if (typeof key !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw new JobError(400, 'Choose your photo again to start a fresh upload.');
-    let photo: Buffer | undefined, name: string | undefined;
+    let photo: Buffer | undefined, name: string | undefined, roomId: unknown;
     for await (const part of request.parts()) {
       if (part.type === 'file') {
         if (part.fieldname !== 'photo') throw new JobError(400, 'Choose one portrait photo.');
         photo = await part.toBuffer();
       } else if (part.fieldname === 'name') name = validName(part.value);
+      else if (part.fieldname === 'roomId') roomId = part.value;
     }
     if (!photo || !name) throw new JobError(400, 'Add Dad’s photo and name.');
-    const job = await jobs.create(owner(request.cookies['fh-owner']), key, name, photo);
+    const who = owner(request.cookies['fh-owner']);
+    const job = await jobs.create(who, key, name, photo, await portraitScope(shared, roomId, who));
     reply.code(202); return jobs.view(job);
   });
   app.get<{ Params: { id: string } }>('/api/characters/:id', async request => jobs.view(await jobs.get(request.params.id, owner(request.cookies['fh-owner']))));
@@ -85,6 +88,7 @@ export async function buildApp<T extends CharacterService = CharacterJobs>(optio
   });
   registerRooms(app, rooms, canonicalOrigin);
   registerShared(app, realtime, options.socketEndpoint);
+  registerPortraits(app, shared, jobs);
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof JobError) return reply.code(error.status).send({ message: error.message });
     if (error instanceof GenerationError) return reply.code(400).send({ message: error.message });

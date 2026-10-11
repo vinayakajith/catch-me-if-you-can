@@ -7,13 +7,17 @@ import { runtime, required } from './runtime.ts';
 import type { CloudJobs } from './jobs.ts';
 import type { FastifyInstance } from 'fastify';
 import { DynamoSocketStore } from './socket-store.ts';
+import { portraitScope } from '../portraits.ts';
+import type { SharedRooms } from '../shared-rooms.ts';
 
-export function registerUploads(app: FastifyInstance, jobs: CloudJobs) {
+export function registerUploads(app: FastifyInstance, jobs: CloudJobs, shared?: SharedRooms) {
   const owner = (cookie?: string) => createHash('sha256').update(cookie ?? '').digest('hex');
   app.post('/api/characters/uploads', { bodyLimit: 4096 }, async (request, reply) => {
-    const data = request.body as { name?: unknown; digest?: unknown } | null, key = request.headers['idempotency-key'];
+    const data = request.body as { name?: unknown; digest?: unknown; roomId?: unknown } | null, key = request.headers['idempotency-key'];
     if (!data || typeof data.name !== 'string' || typeof data.digest !== 'string' || typeof key !== 'string') throw new JobError(400, 'Choose a photo and enter a name.');
-    return reply.code(202).send(await jobs.beginUpload(owner(request.cookies['fh-owner']), key, data.name, data.digest));
+    const who = owner(request.cookies['fh-owner']);
+    if (data.roomId !== undefined && !shared) throw new JobError(503, 'Player photos are temporarily unavailable.');
+    return reply.code(202).send(await jobs.beginUpload(who, key, data.name, data.digest, shared ? await portraitScope(shared, data.roomId, who) : undefined));
   });
   app.post<{ Params: { id: string } }>('/api/characters/uploads/:id/complete', { bodyLimit: 1024 }, async (request, reply) => reply.code(202).send(await jobs.view(await jobs.completeUpload(request.params.id, owner(request.cookies['fh-owner'])))));
 }
@@ -33,8 +37,8 @@ let prepared: Promise<Proxy> | undefined;
 async function prepare() {
   const state = runtime();
   const provider = { available: false, testMode: false, model: 'server-managed', async generate(): Promise<never> { throw new Error('Image calls belong to the worker.'); } };
-  const { app } = await buildApp({ directory: '/tmp/father-hunter', provider, jobs: state.jobs, assets: state.assets, roomStore: state.rooms, limiter: state.limiter, background: false, publicOrigin: required('FATHER_HUNTER_PUBLIC_ORIGIN'), socketStore: new DynamoSocketStore(state.db), socketEndpoint: required('FH_SOCKET_ENDPOINT') });
-  registerUploads(app, state.jobs);
+  const { app, shared } = await buildApp({ directory: '/tmp/father-hunter', provider, jobs: state.jobs, assets: state.assets, roomStore: state.rooms, limiter: state.limiter, background: false, publicOrigin: required('FATHER_HUNTER_PUBLIC_ORIGIN'), socketStore: new DynamoSocketStore(state.db), socketEndpoint: required('FH_SOCKET_ENDPOINT') });
+  registerUploads(app, state.jobs, shared);
   const proxy = awsLambdaFastify(app, { serializeLambdaArguments: false, decorateRequest: false }); await app.ready(); return proxy;
 }
 export async function handler(event: any, context: any) {

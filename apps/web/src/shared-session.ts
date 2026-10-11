@@ -10,7 +10,7 @@ export class SharedSession implements HuntSession {
   constructor(client: SharedClient) {
     this.client = client; const v = client.getSnapshot().view!, p = v.players.find(p => p.id === v.me)!;
     this.roundId = v.round!.id; this.sequence = p.ack;
-    this.local = LocalHuntSession.restore({ snapshot: sharedSnapshot(v.round!, p, v.father!, v.room.expiresAt, client.time(), p.search), lastHintAt: null }, this.time);
+    this.local = LocalHuntSession.restore({ snapshot: sharedSnapshot(v.round!, p, { ...v.father!, atlas: client.atlas ?? v.father!.atlas }, v.room.expiresAt, client.time(), p.search), lastHintAt: null }, this.time);
     this.snapshot = this.local.getSnapshot(); this.watch();
     this.unsubscribe = client.subscribe(this.reconcile); this.timer = setInterval(() => { this.tick(); void this.flush(); }, 200);
   }
@@ -25,7 +25,7 @@ export class SharedSession implements HuntSession {
     if (stamp === this.stamp) { this.emit(); return; } this.stamp = stamp;
     // Keep unacknowledged actions until their receipts arrive. They are safely
     // replayed after a lost response; movement already acknowledged is not predicted twice.
-    this.local = LocalHuntSession.restore({ snapshot: sharedSnapshot(v.round, p, v.father, v.room.expiresAt, this.time(), p.search), lastHintAt: null }, this.time);
+    this.local = LocalHuntSession.restore({ snapshot: sharedSnapshot(v.round, p, { ...v.father, atlas: this.client.atlas ?? v.father.atlas }, v.room.expiresAt, this.time(), p.search), lastHintAt: null }, this.time);
     for (const c of this.pending) if (c.seq > p.ack && c.kind === 'move') this.local.move(c.direction, c.deltaMs);
     this.watch(); this.emit();
   };

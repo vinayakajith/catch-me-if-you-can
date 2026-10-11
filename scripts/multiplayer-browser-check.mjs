@@ -31,7 +31,7 @@ try {
     const context = await browser.newContext(i % 2 ? { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } } : { viewport: { width: 1440, height: 960 } });
     contexts.push(context); const page = await context.newPage(); pages.push(page); page.on('pageerror', error => errors.push(error.message));
   }
-  const host = pages[0]; await host.goto(base, { waitUntil: 'networkidle' });
+  const host = pages[0]; await host.goto(base + '/?legacy=1', { waitUntil: 'networkidle' });
   await host.request.get(`${base}/api/characters/config`);
   const owner = createHash('sha256').update((await contexts[0].cookies(`${base}/api`)).find(c => c.name === 'fh-owner').value).digest('hex');
   const job = await jobs.create(owner, randomUUID(), 'Suresh', await portrait());

@@ -17,7 +17,7 @@ export async function roomRequest<T>(url: string, data?: object, key?: string): 
   } catch (error) { if (error instanceof RoomApiError) throw error; throw new RoomApiError(0, 'Reconnecting… your timer is still running.'); }
   finally { clearTimeout(timeout); }
 }
-export const createRoom = (name: string, fatherName: string, character: { characterId: string } | { sourceRoomId: string }, key: string) => roomRequest<RoomView>('/api/rooms', { name, fatherName, ...character }, key);
+export const createRoom = (name: string, fatherName: string, character: { characterId: string } | { sourceRoomId: string }, key: string) => roomRequest<RoomView>('/api/rooms', { name, fatherName, ...character, ...(import.meta.env.DEV && new URLSearchParams(location.search).has('legacy') ? {} : { mode: 'shared' }) }, key);
 export const roomConfig = () => roomRequest<{ shareOrigin: string; public: boolean; lanAvailable: boolean }>('/api/rooms/config');
 
 export class RoomClient {
@@ -54,7 +54,7 @@ export class RoomClient {
     this.polling = true;
     try { this.accept(await roomRequest<RoomView>(`/api/rooms/${this.id}/state?after=${this.state.view?.cursor ?? 0}`)); this.pollDelay = 500; }
     catch (error) { this.pollDelay = Math.min(60000, Math.max(1000, (error as RoomApiError).retryAfterMs || this.pollDelay * 2)); this.state = { ...this.state, error: (error as Error).message }; this.emit(); }
-    finally { this.polling = false; if (!this.closed) this.timer = setTimeout(() => { if (document.hidden) { this.timer = setTimeout(() => void this.poll(), 3000); } else void this.poll(); }, this.pollDelay); }
+    finally { this.polling = false; if (!this.closed && this.state.view?.room.mode !== 'shared') this.timer = setTimeout(() => { if (document.hidden) { this.timer = setTimeout(() => void this.poll(), 3000); } else void this.poll(); }, this.pollDelay); }
   }
   async join(name: string) { const view = await roomRequest<RoomView>(`/api/rooms/${this.id}/join`, { name }); this.accept(view); }
   async begin(key: string, controller: string) { const result = await roomRequest<ControlledAttempt>(`/api/rooms/${this.id}/attempts`, { controller }, key); this.accept(result.view); return result; }

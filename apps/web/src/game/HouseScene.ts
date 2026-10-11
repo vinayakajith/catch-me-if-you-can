@@ -4,6 +4,8 @@ import { DAD_POSES, bodySvg } from '../art/dad';
 import { prepareCharacters } from './characters';
 import { hideoutSvg, sackSvg, svgUri } from './art';
 import { witchSvg, hammerHeadSvg } from '../art/witch';
+import type { SharedPlayer } from '@catch-me-if-you-can/game-core';
+import { playerTexture } from './player-art';
 
 export interface GameBridge {
   session: HuntSession;
@@ -18,6 +20,8 @@ export interface GameBridge {
   failed(message: string): void;
   inspect?: () => void;
   navigate?: (point: Point) => void;
+  players?: () => SharedPlayer[];
+  actionLabel?(label: string): void;
 }
 
 type Pending = { type: 'search'; slotId: string } | { type: 'catch'; targetId: string };
@@ -49,6 +53,10 @@ export class HouseScene extends Phaser.Scene {
   private hammerHead!: Phaser.GameObjects.Image;
   private hammerImpact: Point | null = null;
   private capturing?: { targetId: string; from: Point; startedAt: number; score: number; bonked: boolean };
+  private peers = new Map<string, { sprite: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; at: Point; target: Point; received: number; revision: number }>();
+  private playerTextures = new Map<string, string>();
+  private selfLabel?: Phaser.GameObjects.Text;
+  private lastLabel = '';
 
 
   constructor(bridge: GameBridge) { super('House'); this.bridge = bridge; }
@@ -71,6 +79,7 @@ export class HouseScene extends Phaser.Scene {
 
   create() {
     if (!this.loaded) return;
+    const density = this.bridge.pixelRatio ?? 1;
     const source = this.textures.get('father-source').getSourceImage() as HTMLImageElement;
     const father = this.bridge.session.getSnapshot().father;
     this.textures.addSpriteSheet('father', source, { frameWidth: source.width / father.columns, frameHeight: source.height / father.rows });
@@ -87,6 +96,7 @@ export class HouseScene extends Phaser.Scene {
     this.captureDad = this.add.image(0, 0, 'father-caught', father.expressions.laugh).setVisible(false).setDepth(2100);
     this.sack = this.add.image(HOUSE.spawn.x + 25, HOUSE.spawn.y - 6, 'sack').setOrigin(.5, 1).setDisplaySize(30, 34).setDepth(1999);
     this.hunter = this.add.image(HOUSE.spawn.x, HOUSE.spawn.y, 'witch', 0).setOrigin(.5, .94).setDisplaySize(73, 100).setDepth(2000);
+    if (this.bridge.players) { this.hunter.setDisplaySize(44, 60); this.selfLabel = this.add.text(0, 0, 'YOU', { resolution: density, fontFamily: 'Arial', fontSize: '11px', fontStyle: 'bold', color: '#fff9da', stroke: '#20352e', strokeThickness: 4 }).setOrigin(.5).setDepth(2300); }
     this.hammerHead = this.add.image(0, 0, 'hammer-head').setDisplaySize(62, 33).setDepth(2250).setVisible(false);
     this.captureFX = this.add.graphics().setDepth(2200);
     this.searchBar = this.add.graphics().setDepth(2200);
@@ -265,10 +275,20 @@ export class HouseScene extends Phaser.Scene {
 
   private async inspectNearest() {
     if (!this.bridge.inputEnabled || this.capturing || this.acting) return;
-    const state = this.bridge.session.getSnapshot();
-    const near = HOUSE.slots.filter(s => canReach(state.player.position, s) && !state.opened.includes(s.id)).sort((a, b) => distance(a.anchor, state.player.position) - distance(b.anchor, state.player.position))[0];
-    if (near) { this.hunter.setFlipX(near.target.x < state.player.position.x); this.acting = true; const result = await this.bridge.session.search(near.id); this.acting = false; if (this.scene.isActive()) this.bridge.feedback(result); }
-    else this.bridge.feedback({ ok: false, kind: 'error', message: 'Tap some furniture to walk over and check it.' });
+    const action = this.contextAction();
+    if (action.target) await this.tap(this.targetPoint(action.target.id));
+    else if (action.slot) this.walkTo(action.slot.anchor, { type: 'search', slotId: action.slot.id });
+    else this.bridge.feedback({ ok: false, kind: 'error', message: 'Tap a room on the map, or tap the floor to walk there.' });
+  }
+
+  private contextAction() {
+    const s = this.bridge.session.getSnapshot(), now = this.bridge.session.time();
+    const target = s.targets.filter(t => !t.claimedBy && (t.kind === 'broom' ? roomAt(broomPosition(t, now - s.startedAt)) === s.player.roomId : (() => {
+      const slot = HOUSE.slots.find(slot => slot.id === t.slotId)!;
+      return (slot.roomId === s.player.roomId || slot.behavior === 'statue' && distance(slot.anchor, s.player.position) < 600) && isDadExposed(s, slot, now);
+    })())).sort((a, b) => distance(this.targetPoint(a.id), s.player.position) - distance(this.targetPoint(b.id), s.player.position))[0];
+    const slot = target ? undefined : HOUSE.slots.filter(slot => slot.roomId === s.player.roomId && !s.opened.includes(slot.id)).sort((a, b) => distance(a.anchor, s.player.position) - distance(b.anchor, s.player.position))[0];
+    return { target, slot, label: this.acting ? 'Catching up…' : s.search ? 'Opening…' : target ? `Catch ${s.father.name}` : slot ? `Open ${slot.name}` : 'Explore a room' };
   }
 
   private sync() {
@@ -301,7 +321,14 @@ export class HouseScene extends Phaser.Scene {
         }
       }
     }
-    for (const target of state.targets) if (target.claimedBy && !this.reacted.has(target.id)) { this.reacted.add(target.id); this.react(target); }
+    for (const target of state.targets) if (target.claimedBy && !this.reacted.has(target.id)) {
+      this.reacted.add(target.id);
+      if (target.claimedBy === state.player.id) this.react(target);
+      else {
+        const at = this.targetPoint(target.id), word = this.add.text(at.x, at.y, 'BAGGED!', { resolution: this.bridge.pixelRatio ?? 1, fontFamily: 'Arial', fontSize: '13px', fontStyle: 'bold', color: '#fff2ba', stroke: '#3e2c45', strokeThickness: 3 }).setDepth(2100).setOrigin(.5);
+        this.tweens.add({ targets: word, y: at.y - 24, alpha: 0, duration: 700, onComplete: () => word.destroy() });
+      }
+    }
     this.animateDads(this.bridge.session.time());
   }
 
@@ -392,7 +419,9 @@ export class HouseScene extends Phaser.Scene {
     this.animateDads(now);
     this.animateCapture(now); // Also settle a last capture after a tab was in the background.
     const stateBefore = this.bridge.session.getSnapshot();
-    const bagSize = 30 + Math.min(10, this.bagCount) * 3;
+    this.animatePlayers(time);
+    const label = this.contextAction().label; if (label !== this.lastLabel) { this.lastLabel = label; this.bridge.actionLabel?.(label); }
+    const bagSize = (this.bridge.players ? 18 : 30) + Math.min(10, this.bagCount) * (this.bridge.players ? 1 : 3);
     const wiggle = !this.bridge.reducedMotion && this.bagCount > 0 ? Math.sin(time / 160) * Math.max(0, Math.sin(time / 900)) : 0;
     this.sack.setDisplaySize(bagSize + wiggle * 2, bagSize * 1.08 - wiggle * 2).setPosition(this.hunter.x + (this.hunter.flipX ? 28 : -28), this.hunter.y - 4).setAngle(wiggle * 5);
     this.searchBar.clear();
@@ -448,5 +477,32 @@ export class HouseScene extends Phaser.Scene {
     this.hunter.setFrame(state.search ? 3 : moving && !this.bridge.reducedMotion ? 1 + Math.floor(time / 160) % 2 : 0).setOrigin(.5, state.search ? .9 : .94);
     if (direction.x) this.hunter.setFlipX(direction.x < 0);
     this.destination.setVisible(this.route.length > 0 && !this.stopped);
+  }
+
+  private animatePlayers(time: number) {
+    const players = this.bridge.players?.(); if (!players) return;
+    const state = this.bridge.session.getSnapshot();
+    for (const p of players.filter(p => p.roundId === state.id)) {
+      const appearance = `${p.id}:${p.avatar ?? 'preset'}`;
+      if (!this.playerTextures.has(appearance)) {
+        const key = 'player-' + this.playerTextures.size; this.playerTextures.set(appearance, key);
+        void playerTexture(this, key, p.colour, p.avatar, this.bridge.pixelRatio ?? 1).catch(() => {});
+      }
+      const key = this.playerTextures.get(appearance)!, texture = this.textures.exists(key) ? key : 'witch';
+      if (p.id === state.player.id) { const frame = this.hunter.frame.name; this.hunter.setTexture(texture, frame); this.selfLabel?.setPosition(this.hunter.x, this.hunter.y - 67); continue; }
+      let peer = this.peers.get(p.id);
+      if (!peer) {
+        peer = { sprite: this.add.image(p.position.x, p.position.y, texture, 0).setOrigin(.5, .94).setDisplaySize(44, 60).setDepth(1900),
+          label: this.add.text(0, 0, p.name.slice(0, 12), { resolution: this.bridge.pixelRatio ?? 1, fontFamily: 'Arial', fontSize: '11px', color: p.colour, backgroundColor: '#fff5db', padding: { x: 4, y: 2 } }).setOrigin(.5).setDepth(1901),
+          at: p.position, target: p.position, received: time, revision: p.revision };
+        this.peers.set(p.id, peer);
+      }
+      if (p.revision !== peer.revision) { peer.at = { x: peer.sprite.x, y: peer.sprite.y }; peer.target = p.position; peer.received = time; peer.revision = p.revision; }
+      const t = this.bridge.reducedMotion ? 1 : Math.min(1, (time - peer.received) / 200), moving = distance(peer.at, peer.target) > 1 && t < 1;
+      peer.sprite.setTexture(texture, moving ? 1 + Math.floor(time / 160) % 2 : 0).setPosition(Phaser.Math.Linear(peer.at.x, peer.target.x, t), Phaser.Math.Linear(peer.at.y, peer.target.y, t));
+      if (peer.target.x !== peer.at.x) peer.sprite.setFlipX(peer.target.x < peer.at.x);
+      peer.sprite.setAlpha(p.connected ? 1 : .4); peer.label.setPosition(peer.sprite.x, peer.sprite.y - 67);
+    }
+    for (const [id, peer] of this.peers) if (!players.some(p => p.id === id && p.roundId === state.id)) { peer.sprite.destroy(); peer.label.destroy(); this.peers.delete(id); }
   }
 }

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { CHARACTER_RETENTION_MS, DEFAULT_SKIN, EXPRESSIONS, EXPRESSION_FRAMES, type CharacterJobView, type Expression } from '../../../packages/game-core/src/index.ts';
-import { GenerationError, type AssetStore, type CharacterJob, type ImageProvider, type JobStore } from './contracts.ts';
+import { GenerationError, type AssetStore, type CharacterJob, type ImageProvider, type JobStore, type PlayerPortraitJob } from './contracts.ts';
 import { assembleAtlas, normalizeHead, normalizePhoto } from './images.ts';
 
 const MAX_ATTEMPTS = 8;
@@ -11,9 +11,11 @@ export class CharacterJobs {
   private store: JobStore; private assets: AssetStore; readonly provider: ImageProvider;
   private clock: () => number; private dailyJobs: number; private retryDelayMs: number;
   private running = false; private stopping = false; private task: Promise<void> | null = null;
-  constructor(options: { store: JobStore; assets: AssetStore; provider: ImageProvider; clock?: () => number; dailyJobs?: number; retryDelayMs?: number }) {
+  private onPlayerReady?: (job: CharacterJob) => Promise<void>;
+  constructor(options: { store: JobStore; assets: AssetStore; provider: ImageProvider; clock?: () => number; dailyJobs?: number; retryDelayMs?: number; onPlayerReady?: (job: CharacterJob) => Promise<void> }) {
     this.store = options.store; this.assets = options.assets; this.provider = options.provider;
     this.clock = options.clock ?? Date.now; this.dailyJobs = options.dailyJobs ?? 20; this.retryDelayMs = options.retryDelayMs ?? 2000;
+    this.onPlayerReady = options.onPlayerReady;
   }
   async initialize() {
     for (const job of this.store.list()) {
@@ -39,9 +41,9 @@ export class CharacterJobs {
     return this.get(job.id, owner);
   }
   view(job: CharacterJob) { return characterJobView(job, this.provider.available && this.provider.canAffordGeneration !== false); }
-  async characterBytes(id: string, owner: string) { return this.asset(id, owner, 'atlas.png'); }
-  async create(owner: string, idempotencyKey: string, name: string, upload: Buffer) {
-    const fingerprint = createHash('sha256').update(upload).update(name).digest('hex');
+  async characterBytes(id: string, owner: string) { if (this.get(id, owner).playerRoomId) throw new JobError(403, 'Player faces stay in their original room.'); return this.asset(id, owner, 'atlas.png'); }
+  async create(owner: string, idempotencyKey: string, name: string, upload: Buffer, player?: PlayerPortraitJob) {
+    const fingerprint = createHash('sha256').update(upload).update(name).update(player?.roomId ?? '').digest('hex');
     const existing = this.store.find(owner, idempotencyKey);
     if (existing) {
       if (existing.fingerprint !== fingerprint) throw new JobError(409, 'This upload has changed. Choose the photo again.');
@@ -57,8 +59,8 @@ export class CharacterJobs {
     }
     const now = this.clock(), recent = this.store.list().filter(job => job.createdAt > now - CHARACTER_RETENTION_MS);
     if (recent.length >= this.dailyJobs || recent.filter(job => job.owner === owner).length >= 10) throw new JobError(429, 'Today’s photo-generation limit has been reached. Your existing Dads still work.');
-    const job: CharacterJob = { id: randomUUID(), owner, idempotencyKey, fingerprint, name, status: 'queued', createdAt: now, expiresAt: now + CHARACTER_RETENTION_MS,
-      baseRevision: 0, baseApproved: false, sourcePresent: true, completed: {}, currentExpression: 'grin', stepAttempts: {}, attempts: 0,
+    const job: CharacterJob = { id: randomUUID(), owner, idempotencyKey, fingerprint, name, status: 'queued', createdAt: now, expiresAt: player?.expiresAt ?? now + CHARACTER_RETENTION_MS,
+      ...(player ? { playerRoomId: player.roomId } : {}), baseRevision: 0, baseApproved: false, sourcePresent: true, completed: {}, currentExpression: player ? 'laugh' : 'grin', stepAttempts: {}, attempts: 0,
       skin: DEFAULT_SKIN, atlasRevision: 0, error: null, usage: [], unmeteredRequests: 0, requestIds: [], model: this.provider.model, testMode: this.provider.testMode };
     // Reserve the idempotency key before yielding to disk I/O.
     job.status = 'uploading'; this.store.save(job);
@@ -68,6 +70,7 @@ export class CharacterJobs {
   }
   approve(id: string, owner: string, revision: number) {
     const job = this.get(id, owner);
+    if (job.playerRoomId) throw new JobError(409, 'Your game face is handled automatically.');
     if (revision !== job.baseRevision) throw new JobError(409, 'Dad’s preview changed. Check the latest face first.');
     if (job.baseApproved) return job;
     if (job.status !== 'awaiting_approval') throw new JobError(409, 'Wait for Dad’s first face to finish.');
@@ -75,6 +78,7 @@ export class CharacterJobs {
   }
   retry(id: string, owner: string, expression: Expression, revision: number) {
     const job = this.get(id, owner);
+    if (job.playerRoomId) throw new JobError(409, 'The original photo has been deleted. Choose a new photo or use your preset.');
     if (revision !== job.baseRevision) throw new JobError(409, 'The preview changed. Check Dad’s latest face.');
     if (['uploading', 'queued', 'generating'].includes(job.status)) return job;
     if (job.error && !this.view(job).error?.canRetry) throw new JobError(409, job.error.message);
@@ -83,6 +87,7 @@ export class CharacterJobs {
   }
   async finalize(id: string, owner: string, name: string, skin: string) {
     const job = this.get(id, owner);
+    if (job.playerRoomId) throw new JobError(409, 'Your game face is handled automatically.');
     if (job.status === 'ready') return job;
     if (!['preview', 'failed'].includes(job.status) || !job.baseApproved || EXPRESSIONS.some(e => !job.completed[e])) throw new JobError(409, 'Finish all six faces before starting the hunt.');
     // Remove the source before publishing. A failed deletion can safely be retried.
@@ -91,6 +96,7 @@ export class CharacterJobs {
   }
   async asset(id: string, owner: string, name: string) {
     const job = this.get(id, owner);
+    if (job.playerRoomId) { if (name !== 'laugh.png' || job.status !== 'ready') throw new JobError(404, 'Face not available.'); return this.assets.read(id, name); }
     if (!['source.jpg', 'atlas.png'].includes(name) || (name === 'source.jpg' && !job.sourcePresent)) throw new JobError(404, 'Image not found.');
     return this.assets.read(id, name);
   }
@@ -128,6 +134,11 @@ export class CharacterJobs {
       if (job.expiresAt <= this.clock()) { await this.expire(job); return; }
       await this.assets.write(job.id, `${expression}.png`, normalized.image);
       job.completed[expression] = `${expression}.png`;
+      if (job.playerRoomId) {
+        await this.assets.remove(job.id, 'source.jpg'); job.sourcePresent = false; job.skin = normalized.skin; job.atlasRevision = 1;
+        job.status = 'ready'; job.error = null; job.currentExpression = null; this.store.save(job);
+        await this.onPlayerReady?.(job).catch(() => {}); return;
+      }
       if (!job.baseApproved) {
         await this.assets.write(job.id, 'base.png', result.image);
         job.baseRevision++; job.skin = normalized.skin;
@@ -146,12 +157,15 @@ export class CharacterJobs {
       // image attempt and must not consume the face's redraw allowance.
       if (['development_budget', 'access', 'quota', 'service_paused', 'not_configured'].includes(fault.code)) { job.attempts--; job.stepAttempts[expression] = Math.max(0, (job.stepAttempts[expression] ?? 1) - 1); }
       job.error = { code: fault.code, message: fault.code === 'invalid_art' ? 'This face came out cropped or without a clean background. We can redraw just this face.' : fault.message, canRetry: fault.canRetry, uncertain: fault.uncertain };
-      const canAutoRetry = fault.automatic && !fault.uncertain && (fault.retryDelayMs ?? 0) <= 30_000 && job.attempts < MAX_ATTEMPTS && (job.stepAttempts[expression] ?? 0) < 2;
+      if (job.playerRoomId) job.error.canRetry = false;
+      const canAutoRetry = !job.playerRoomId && fault.automatic && !fault.uncertain && (fault.retryDelayMs ?? 0) <= 30_000 && job.attempts < MAX_ATTEMPTS && (job.stepAttempts[expression] ?? 0) < 2;
       job.status = fault.uncertain ? 'interrupted' : 'failed'; this.store.save(job);
       if (canAutoRetry && !this.stopping) {
         await new Promise(resolve => setTimeout(resolve, Math.max(this.retryDelayMs, fault.retryDelayMs ?? 0)));
         job.status = 'queued'; this.store.save(job);
       }
+    } finally {
+      if (job.playerRoomId) { await this.assets.remove(job.id, 'source.jpg'); job.sourcePresent = false; this.store.save(job); if (job.expiresAt <= this.clock()) await this.expire(job); }
     }
   }
   private async expire(job: CharacterJob) {
@@ -161,7 +175,7 @@ export class CharacterJobs {
     for (const job of this.store.list()) {
       if (job.expiresAt <= this.clock() && job.status !== 'generating') await this.expire(job);
       // Recover deletion after a crash between final publication and cleanup.
-      if (job.status === 'ready') await this.assets.remove(job.id, 'source.jpg');
+      if (job.status === 'ready' || job.playerRoomId && ['failed', 'interrupted'].includes(job.status)) { await this.assets.remove(job.id, 'source.jpg'); if (job.sourcePresent) { job.sourcePresent = false; this.store.save(job); } }
     }
   }
   async idle() { await this.task; }
@@ -169,6 +183,10 @@ export class CharacterJobs {
 }
 
 export function characterJobView(job: CharacterJob, affordable: boolean): CharacterJobView {
+    if (job.playerRoomId) return { id: job.id, name: job.name, status: job.status, completed: job.completed.laugh ? ['laugh'] : [], currentExpression: job.currentExpression,
+      baseRevision: 0, baseApproved: false, attempts: job.attempts, remainingAttempts: 0, retryableExpressions: [], expiresAt: job.expiresAt, sourceUrl: null,
+      preview: job.status === 'ready' ? { id: job.id, name: job.name, version: 1, atlas: `/api/characters/${job.id}/assets/laugh.png`, columns: 1, rows: 1, expressions: { serious: 0, grin: 0, laugh: 0, giggle: 0, bonked: 0, dizzy: 0 }, expiresAt: job.expiresAt } : null,
+      error: job.error ? { ...job.error, canRetry: false } : null, testMode: job.testMode };
     const remainingAttempts = Math.max(0, MAX_ATTEMPTS - job.attempts);
     const idle = !['uploading', 'queued', 'generating', 'ready', 'expired'].includes(job.status);
     const retryableExpressions = idle && affordable && remainingAttempts ? EXPRESSIONS.filter(expression => (job.stepAttempts[expression] ?? 0) < 2 && (job.baseApproved ? expression !== 'grin' && (Boolean(job.completed[expression]) || expression === job.currentExpression) : expression === 'grin')) : [];

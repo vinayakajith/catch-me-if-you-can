@@ -11,6 +11,7 @@ export interface ImageProvider {
   generate(input: { photo: Buffer; base?: Buffer; expression: Expression; correction?: string }): Promise<ImageResult>;
 }
 export interface CharacterJob {
+  playerRoomId?: string;
   id: string; owner: string; idempotencyKey: string; fingerprint: string; name: string;
   status: CharacterJobStatus; createdAt: number; expiresAt: number;
   baseRevision: number; baseApproved: boolean; sourcePresent: boolean;
@@ -42,12 +43,13 @@ export class GenerationError extends Error {
 
 export type Awaitable<T> = T | Promise<T>;
 export type AssetResponse = Buffer | { url: string };
+export interface PlayerPortraitJob { roomId: string; expiresAt: number }
 export interface CharacterService {
   initialize(): Promise<void>;
   get(id: string, owner: string): Awaitable<CharacterJob>;
   findUpload(owner: string, key: string): Awaitable<CharacterJob>;
   view(job: CharacterJob): Awaitable<CharacterJobView>;
-  create(owner: string, key: string, name: string, upload: Buffer): Promise<CharacterJob>;
+  create(owner: string, key: string, name: string, upload: Buffer, player?: PlayerPortraitJob): Promise<CharacterJob>;
   approve(id: string, owner: string, revision: number): Awaitable<CharacterJob>;
   retry(id: string, owner: string, expression: Expression, revision: number): Awaitable<CharacterJob>;
   finalize(id: string, owner: string, name: string, skin: string): Promise<CharacterJob>;

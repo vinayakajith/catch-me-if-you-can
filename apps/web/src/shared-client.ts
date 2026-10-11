@@ -10,6 +10,8 @@ export class SharedClient {
   private ws?: WebSocket; private pending = new Map<string, Pending>(); private stopped = false;
   private timer?: ReturnType<typeof setTimeout>; private pulse?: ReturnType<typeof setInterval>; private connecting = false; private failures = 0;
   private latestState = 0; private lastMessage = 0; offset = 0;
+  atlas?: string;
+  private artwork?: Promise<void>;
   constructor(id: string) { this.id = id; }
   time = () => Date.now() + this.offset;
   getSnapshot = () => this.state;
@@ -22,6 +24,16 @@ export class SharedClient {
     } catch (error) { this.state = { ...this.state, error: (error as Error).message }; this.emit(); }
   }
   async join(name: string) { await roomRequest(`/api/rooms/${this.id}/join`, { name }); await this.initialize(); }
+  prepare() {
+    return this.artwork ??= (async () => {
+      const father = this.state.view?.father; if (!father) throw new Error('Join the room first.');
+      const [response] = await Promise.all([fetch(father.atlas, { credentials: 'same-origin' }), import('phaser'), import('./game/HouseScene')]);
+      if (!response.ok) throw new Error('The house artwork could not load. Try again.');
+      const url = URL.createObjectURL(await response.blob());
+      try { const image = new Image(); image.src = url; await image.decode(); if (this.stopped) URL.revokeObjectURL(url); else this.atlas = url; }
+      catch { URL.revokeObjectURL(url); throw new Error('The house artwork could not load. Try again.'); }
+    })().catch(error => { this.artwork = undefined; throw error; });
+  }
   private accept(view: SharedView) {
     const old = this.state.view;
     if (old) {
@@ -94,5 +106,5 @@ export class SharedClient {
       if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message));
     });
   }
-  dispose() { this.stopped = true; clearTimeout(this.timer); clearInterval(this.pulse); this.ws?.close(); for (const p of this.pending.values()) p.reject(new Error('This view has closed.')); this.pending.clear(); this.listeners.clear(); }
+  dispose() { this.stopped = true; clearTimeout(this.timer); clearInterval(this.pulse); this.ws?.close(); if (this.atlas) URL.revokeObjectURL(this.atlas); for (const p of this.pending.values()) p.reject(new Error('This view has closed.')); this.pending.clear(); this.listeners.clear(); }
 }

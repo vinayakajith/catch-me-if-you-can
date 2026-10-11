@@ -8,6 +8,7 @@ import { Round, type Preferences } from './Round';
 import { Leaderboard } from './Leaderboard';
 import { useCaseTitle } from './useCaseTitle';
 import './rooms.css';
+import { SharedRoomPage } from './SharedRoomPage';
 
 export function RoomPage({ id, preferences, togglePreference, onHome, onCreate }: { id: string; preferences: Preferences; togglePreference(key: keyof Preferences): void; onHome(): void; onCreate(): void }) {
   const [client] = useState(() => new RoomClient(id));
@@ -31,6 +32,7 @@ export function RoomPage({ id, preferences, togglePreference, onHome, onCreate }
     try { if (navigator.clipboard) await navigator.clipboard.writeText(share.url); else { input.current?.select(); if (!document.execCommand('copy')) throw new Error(); } setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { input.current?.focus(); input.current?.select(); setError('Select and copy the invite above.'); }
   };
+  if (view?.room.mode === 'shared') return <SharedRoomPage id={id} preferences={preferences} togglePreference={togglePreference} onHome={onHome} onCreate={onCreate} />;
   if (run && view?.room.status !== 'closed') return <Round key={run.viewKey} name={view!.me!.name} seed={run.getSnapshot().seed} father={view!.father!} session={run} resumed={run.resumed} room={view!} preferences={preferences} togglePreference={togglePreference} onLeave={() => { setRun(null); }} onReplay={() => setRun(new NetworkHuntSession(client))} onCreate={onCreate} />;
   return <div className="room-page"><header className="site-header"><Brand onClick={onHome} /><button className="text-button" onClick={onHome}><ArrowLeft size={16} /> Home</button></header>
     {!view ? <main className="room-loading"><span className="eyebrow">THE WITCH’S MISSING ASSISTANT</span><h1>Finding your case…</h1><p role="status">{connectionError || 'Checking the invite.'}</p></main> :

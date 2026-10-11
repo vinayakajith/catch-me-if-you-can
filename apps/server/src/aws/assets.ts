@@ -30,7 +30,7 @@ export class S3Assets implements AssetStore {
     } while (token);
   }
   async url(id: string, name: string, expiresAt: number) { return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: this.key(id, name), ResponseCacheControl: 'private, no-store' }), { expiresIn: Math.max(1, Math.min(60, Math.floor((expiresAt - Date.now()) / 1000))) }); }
-  async upload(id: string) { return createPresignedPost(this.client, { Bucket: this.bucket, Key: this.key(id, 'upload.jpg'), Expires: 300, Fields: { 'Content-Type': 'image/jpeg', 'x-amz-server-side-encryption': 'AES256' }, Conditions: [['content-length-range', 1, MAX_UPLOAD_BYTES], ['eq', '$Content-Type', 'image/jpeg'], ['eq', '$x-amz-server-side-encryption', 'AES256']] }); }
+  async upload(id: string, expiresAt = Date.now() + 300000) { return createPresignedPost(this.client, { Bucket: this.bucket, Key: this.key(id, 'upload.jpg'), Expires: Math.max(1, Math.min(300, Math.floor((expiresAt - Date.now()) / 1000))), Fields: { 'Content-Type': 'image/jpeg', 'x-amz-server-side-encryption': 'AES256' }, Conditions: [['content-length-range', 1, MAX_UPLOAD_BYTES], ['eq', '$Content-Type', 'image/jpeg'], ['eq', '$x-amz-server-side-encryption', 'AES256']] }); }
   async uploaded(id: string) {
     let object;
     try { object = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.key(id, 'upload.jpg') })); }

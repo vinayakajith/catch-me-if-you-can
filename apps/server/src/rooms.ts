@@ -7,6 +7,7 @@ import { BALAJI, EXPIRY_MS, HOUSE, LocalHuntSession, MAX_PLAYERS, MOVEMENT_BUFFE
 import type { AssetStore, CharacterService } from './contracts.ts';
 import { JobError } from './jobs.ts';
 import type { RoomPlayer, RoomRecord, RoomStore } from './room-store.ts';
+import { SharedRooms } from './shared-rooms.ts';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const identity = (request: FastifyRequest) => hash(request.cookies['fh-owner'] ?? '');
@@ -183,7 +184,11 @@ export class Rooms {
     for (const room of await this.store.list()) {
       if (this.clock() < room.expiresAt) continue;
       if (this.clock() >= room.resultsExpireAt) { await this.assets.remove(room.id); await this.store.remove(room.id); continue; }
-      if (!room.cleaned) await this.change(room.id, current => { current.cleaned = true; current.events = []; for (const p of current.players) p.attempt = null; });
+      if (!room.cleaned) await this.change(room.id, current => {
+        if (current.shared) new SharedRooms(this.store, this.clock).advance(current);
+        current.cleaned = true; current.events = [];
+        for (const p of current.players) { p.attempt = null; if (p.shared) { delete p.shared.avatar; delete p.shared.avatarJob; p.shared.connected = false; p.shared.revision++; } }
+      });
     }
   }
   async close() { await this.store.close(); }

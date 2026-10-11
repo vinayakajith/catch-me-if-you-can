@@ -39,15 +39,15 @@ export async function recoverCharacterUpload() {
     }
   }
 }
-export async function createCharacterJob(photo: Blob, name: string, key: string) {
-  try { localStorage.setItem(pendingKey, key); } catch { /* Same-tab retries still reuse this key. */ }
+export async function createCharacterJob(photo: Blob, name: string, key: string, playerRoomId?: string) {
+  try { if (!playerRoomId) localStorage.setItem(pendingKey, key); } catch { /* Same-tab retries still reuse this key. */ }
   let cloud = false;
   try {
     cloud = (await characterConfig()).uploadMode === 's3';
     if (cloud) {
       const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await photo.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('');
       const result = await request<{ job: CharacterJobView; upload: { url: string; fields: Record<string, string> } | null }>('/api/characters/uploads', {
-        method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify({ name, digest }),
+        method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify({ name, digest, ...(playerRoomId ? { roomId: playerRoomId } : {}) }),
       });
       if (!result.upload) return result.job;
       const body = new FormData();
@@ -60,10 +60,11 @@ export async function createCharacterJob(photo: Blob, name: string, key: string)
       return completeUpload(result.job.id);
     }
     const body = new FormData(); body.append('name', name); body.append('photo', photo, 'portrait.jpg');
+    if (playerRoomId) body.append('roomId', playerRoomId);
     return await request<CharacterJobView>('/api/characters', { method: 'POST', headers: { 'idempotency-key': key }, body });
   }
   catch (fault) {
-    if (!cloud && fault instanceof CharacterApiError && fault.status >= 400 && fault.status < 500) { try { localStorage.removeItem(pendingKey); } catch { /* Unavailable storage. */ } }
+    if (!cloud && !playerRoomId && fault instanceof CharacterApiError && fault.status >= 400 && fault.status < 500) { try { localStorage.removeItem(pendingKey); } catch { /* Unavailable storage. */ } }
     throw fault;
   }
 }

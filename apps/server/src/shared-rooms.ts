@@ -68,6 +68,12 @@ export class SharedRooms {
       cursor: state.cursor, events: me ? state.events : [], lastScores: me || state.phase === 'closed' ? state.lastScores : [] };
   }
   async view(id: string, owner: string) { return this.viewOf(await this.get(id), owner); }
+  async publishAvatar(id: string, owner: string, jobId: string) {
+    await this.change(id, room => {
+      const p = this.member(room, owner);
+      if (room.expiresAt > this.clock() && p.avatarJob === jobId) { p.avatar = `/api/rooms/${id}/players/${p.id}/face?v=${jobId}`; p.revision++; }
+    });
+  }
   async connect(id: string, owner: string, connectionId: string) {
     await this.change(id, room => {
       if (room.shared!.phase === 'closed') throw new JobError(410, 'This room has closed.');
@@ -115,7 +121,7 @@ export class SharedRooms {
         state.round = createSharedRound(randomUUID(), randomUUID(), now, state.round ? targetSignature(state.round.targets) : '');
         state.phase = 'countdown'; state.events = [];
         active.forEach((p, i) => {
-          p.position = { x: HOUSE.spawn.x + (i % 3 - 1) * 32, y: HOUSE.spawn.y + Math.floor(i / 3) * 28 };
+          p.position = { x: HOUSE.spawn.x + (i - 2) * 70, y: HOUSE.spawn.y + (i % 2) * 18 };
           p.roomId = 'hall'; p.score = 0; p.roundId = state.round!.id; p.ack = 0; p.credit = 0; p.creditAt = state.round!.startedAt;
           p.search = null; p.receipts = []; p.lastHintAt = null; p.revision++;
         });

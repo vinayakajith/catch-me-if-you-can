@@ -1,12 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { CHARACTER_RETENTION_MS, DEFAULT_SKIN, EXPRESSIONS, type CharacterServiceConfig, type Expression } from '../../../../packages/game-core/src/index.ts';
-import { GenerationError, type CharacterJob, type CharacterService, type ImageProvider, type ImageResult } from '../contracts.ts';
+import { GenerationError, type CharacterJob, type CharacterService, type ImageProvider, type ImageResult, type PlayerPortraitJob } from '../contracts.ts';
 import { JobError, characterJobView } from '../jobs.ts';
 import { assembleAtlas, normalizeHead, normalizePhoto, MAX_UPLOAD_BYTES } from '../images.ts';
 import { BudgetedImageProvider } from '../budget.ts';
 import { Database, conflict, type Item } from './database.ts';
 import { S3Assets } from './assets.ts';
 import { DynamoBudget, DynamoRateLimiter } from './limits.ts';
+import { SharedRooms } from '../shared-rooms.ts';
+import { DynamoRoomStore } from './room-store.ts';
 const order: Expression[] = ['grin', 'serious', 'laugh', 'giggle', 'bonked', 'dizzy'];
 interface CloudJob extends CharacterJob { revision: number; digest: string; etag?: string; token?: string; leaseUntil?: number; notBefore?: number }
 export interface JobMessage { jobId: string; revision: number }
@@ -35,7 +37,7 @@ export class CloudJobs implements CharacterService {
   }
   async view(job: CharacterJob) { return characterJobView(job, (await this.config()).available); }
   async create(): Promise<CharacterJob> { throw new JobError(400, 'Please upload the photo from the game page.'); }
-  private item(job: CloudJob): Item { return { pk: `JOB#${job.id}`, sk: 'META', version: job.revision, data: job, gcKind: 'JOB', gcAt: job.status === 'generating' ? job.leaseUntil : job.status === 'uploading' ? Math.min(job.expiresAt, job.createdAt + 900000) : job.expiresAt, ttl: Math.ceil((job.expiresAt + 86400000) / 1000) }; }
+  private item(job: CloudJob): Item { return { pk: `JOB#${job.id}`, sk: 'META', version: job.revision, data: job, gcKind: 'JOB', gcAt: job.status === 'generating' ? job.leaseUntil : job.status === 'uploading' ? Math.min(job.expiresAt, job.createdAt + 900000) : job.playerRoomId && job.createdAt + 360000 > this.clock() ? Math.min(job.expiresAt, this.clock() + 60000) : job.expiresAt, ttl: Math.ceil((job.expiresAt + 86400000) / 1000) }; }
   private async save(job: CloudJob, creating = false) {
     const previous = job.revision; job.revision++;
     const writes = [this.db.write(this.item(job), creating ? undefined : previous)];
@@ -43,26 +45,27 @@ export class CloudJobs implements CharacterService {
     if (creating) writes.push(this.db.write({ pk: `JOBKEY#${job.owner}#${job.idempotencyKey}`, sk: 'META', jobId: job.id, ttl: Math.ceil(job.expiresAt / 1000) }));
     try { await this.db.transact(writes); } catch (error) { job.revision = previous; if (conflict(error)) throw new JobError(409, 'This preview changed. Reload the latest saved progress.'); throw error; }
   }
-  async beginUpload(owner: string, key: string, name: string, digest: string) {
+  async beginUpload(owner: string, key: string, name: string, digest: string, player?: PlayerPortraitJob) {
     if (!/^[a-zA-Z0-9-]{16,80}$/.test(key) || !/^[a-f0-9]{64}$/.test(digest) || !name.trim() || name.trim().length > 32 || /[\u0000-\u001f\u007f]/.test(name)) throw new JobError(400, 'Choose one photo and enter a name.');
-    const fingerprint = createHash('sha256').update(digest).update(name).digest('hex');
+    const fingerprint = createHash('sha256').update(digest).update(name).update(player?.roomId ?? '').digest('hex');
     const existing = await this.db.get(`JOBKEY#${owner}#${key}`);
     if (existing) { const job = await this.get(existing.jobId, owner); if (job.fingerprint !== fingerprint) throw new JobError(409, 'This upload has changed. Choose it again.'); return this.uploadReply(job); }
     const service = await this.config(); if (!service.available) throw new JobError(503, service.message!);
     if (!await new DynamoRateLimiter(this.db).take('photo:global', 20, 86400000, this.clock())) throw new JobError(429, 'Today’s photo limit has been reached. Sample games and saved characters still work.');
     const now = this.clock();
-    const job: CloudJob = { id: randomUUID(), owner, idempotencyKey: key, fingerprint, digest, name: name.trim(), status: 'uploading', revision: 0, createdAt: now, expiresAt: now + CHARACTER_RETENTION_MS,
-      baseRevision: 0, baseApproved: false, sourcePresent: false, completed: {}, currentExpression: 'grin', stepAttempts: {}, attempts: 0, skin: DEFAULT_SKIN, atlasRevision: 0, error: null, usage: [], unmeteredRequests: 0, requestIds: [], model: this.options.model, testMode: !!this.options.testMode };
+    const job: CloudJob = { id: randomUUID(), owner, idempotencyKey: key, fingerprint, digest, name: name.trim(), status: 'uploading', revision: 0, createdAt: now, expiresAt: player?.expiresAt ?? now + CHARACTER_RETENTION_MS,
+      ...(player ? { playerRoomId: player.roomId } : {}), baseRevision: 0, baseApproved: false, sourcePresent: false, completed: {}, currentExpression: player ? 'laugh' : 'grin', stepAttempts: {}, attempts: 0, skin: DEFAULT_SKIN, atlasRevision: 0, error: null, usage: [], unmeteredRequests: 0, requestIds: [], model: this.options.model, testMode: !!this.options.testMode };
     try { await this.save(job, true); } catch (error) { if (error instanceof JobError && error.status === 409) { const duplicate = await this.findUpload(owner, key); if (duplicate.fingerprint !== fingerprint) throw error; return this.uploadReply(duplicate); } throw error; }
     return this.uploadReply(job);
   }
-  private async uploadReply(job: CloudJob) { return { job: await this.view(job), upload: job.status === 'uploading' ? await this.assets.upload(job.id) : null }; }
+  private async uploadReply(job: CloudJob) { return { job: await this.view(job), upload: job.status === 'uploading' ? await this.assets.upload(job.id, job.expiresAt) : null }; }
   async completeUpload(id: string, owner: string) {
     const job = await this.get(id, owner); if (job.status !== 'uploading') return job;
     job.etag = await this.assets.uploaded(id); job.status = 'queued'; await this.save(job); return job;
   }
   async approve(id: string, owner: string, revision: number) {
     const job = await this.get(id, owner);
+    if (job.playerRoomId) throw new JobError(409, 'Your game face is handled automatically.');
     if (job.baseRevision !== revision) throw new JobError(409, 'The preview changed. Check the latest face.');
     if (job.baseApproved) return job;
     if (job.status !== 'awaiting_approval') throw new JobError(409, 'Wait for the first face to finish.');
@@ -70,6 +73,7 @@ export class CloudJobs implements CharacterService {
   }
   async retry(id: string, owner: string, expression: Expression, revision: number) {
     const job = await this.get(id, owner), view = await this.view(job);
+    if (job.playerRoomId) throw new JobError(409, 'The original photo has been deleted. Choose another photo or use your preset.');
     if (revision !== job.baseRevision) throw new JobError(409, 'The preview changed. Check the latest face.');
     if (['uploading', 'queued', 'generating'].includes(job.status)) return job;
     if ((job.error && !view.error?.canRetry) || !view.retryableExpressions.includes(expression)) throw new JobError(409, job.error?.message ?? 'This face has used its retry allowance.');
@@ -77,16 +81,18 @@ export class CloudJobs implements CharacterService {
   }
   async finalize(id: string, owner: string, name: string, skin: string) {
     const job = await this.get(id, owner); if (job.status === 'ready') return job;
+    if (job.playerRoomId) throw new JobError(409, 'Your game face is handled automatically.');
     if (!job.baseApproved || !['preview', 'failed'].includes(job.status) || EXPRESSIONS.some(e => !job.completed[e])) throw new JobError(409, 'Finish all six faces first.');
     await this.assets.remove(id, 'source.jpg'); await this.assets.remove(id, 'upload.jpg');
     job.sourcePresent = false; job.status = 'ready'; job.name = name; job.skin = skin; job.error = null; job.currentExpression = null; await this.save(job); return job;
   }
   async asset(id: string, owner: string, name: string) {
     const job = await this.get(id, owner);
+    if (job.playerRoomId) { if (name !== 'laugh.png' || job.status !== 'ready') throw new JobError(404, 'Face not available.'); return { url: await this.assets.url(id, name, Math.min(this.clock() + 60000, job.expiresAt)) }; }
     if (!['atlas.png', 'source.jpg'].includes(name) || (name === 'source.jpg' && !job.sourcePresent)) throw new JobError(404, 'Image not found.');
     return { url: await this.assets.url(id, name, Math.min(this.clock() + 60000, job.expiresAt)) };
   }
-  async characterBytes(id: string, owner: string) { const job = await this.get(id, owner); if (job.status !== 'ready') throw new JobError(409, 'Finish this character first.'); return this.assets.read(id, 'atlas.png'); }
+  async characterBytes(id: string, owner: string) { const job = await this.get(id, owner); if (job.playerRoomId) throw new JobError(403, 'Player faces stay in their original room.'); if (job.status !== 'ready') throw new JobError(409, 'Finish this character first.'); return this.assets.read(id, 'atlas.png'); }
   async process(message: JobMessage) {
     const record = await this.db.get(`JOB#${message.jobId}`), job = record?.data as CloudJob | undefined;
     if (!job || job.status !== 'queued' || job.revision !== message.revision || job.expiresAt <= this.clock()) return;
@@ -106,6 +112,7 @@ export class CloudJobs implements CharacterService {
       if (!this.options.provider) throw new GenerationError('not_configured', 'Photo generation is not connected yet. Sample artwork is ready to play.', { canRetry: true });
       const provider = new BudgetedImageProvider(await this.options.provider(), new DynamoBudget(this.db, this.options.budgetMicros, `${job.id}:${job.token}`));
       const result = await provider.generate({ photo, base, expression });
+      if (job.playerRoomId && job.expiresAt <= this.clock()) { await this.assets.remove(job.id); return; }
       // Save the provider output before composition. A crashed worker can finish
       // this exact image without paying for another generation.
       await this.assets.write(job.id, `result-${job.token}.png`, result.image);
@@ -118,13 +125,27 @@ export class CloudJobs implements CharacterService {
       if (['access', 'quota', 'not_configured'].includes(fault.code)) await this.db.put({ pk: 'IMAGE_HEALTH', sk: 'META', retryAt: this.clock() + 300000, message: fault.message });
       job.error = { code: fault.code, message: fault.message, canRetry: fault.canRetry, uncertain: fault.uncertain };
       console.warn(JSON.stringify({ event: 'image_job_failed', code: fault.code, uncertain: fault.uncertain }));
-      const automatic = fault.automatic && !fault.uncertain && (fault.retryDelayMs ?? 0) <= 30000 && job.attempts < 8 && (job.stepAttempts[expression] ?? 0) < 2;
+      if (job.playerRoomId) job.error.canRetry = false;
+      const automatic = !job.playerRoomId && fault.automatic && !fault.uncertain && (fault.retryDelayMs ?? 0) <= 30000 && job.attempts < 8 && (job.stepAttempts[expression] ?? 0) < 2;
       job.status = automatic ? 'queued' : fault.uncertain ? 'interrupted' : 'failed'; job.notBefore = this.clock() + Math.max(2000, fault.retryDelayMs ?? 0); await this.save(job);
+    } finally {
+      if (job.playerRoomId) { await this.assets.remove(job.id, 'source.jpg'); await this.assets.remove(job.id, 'upload.jpg'); if (job.expiresAt <= this.clock()) await this.assets.remove(job.id); }
     }
   }
   private async finish(job: CloudJob, result: ImageResult) {
-    if (job.expiresAt <= this.clock()) return;
+    if (job.expiresAt <= this.clock()) { if (job.playerRoomId) await this.assets.remove(job.id); return; }
     const expression = job.currentExpression!, normalized = await normalizeHead(result.image);
+    if (job.playerRoomId) {
+      if (job.expiresAt <= this.clock()) { await this.assets.remove(job.id); return; }
+      await this.assets.write(job.id, 'laugh.png', normalized.image);
+      await this.assets.remove(job.id, 'source.jpg'); await this.assets.remove(job.id, 'upload.jpg');
+      job.completed = { laugh: 'laugh.png' }; job.sourcePresent = false; job.atlasRevision = 1; job.status = 'ready'; job.currentExpression = null; job.error = null; job.leaseUntil = undefined;
+      if (result.usage) job.usage.push(result.usage); else job.unmeteredRequests++;
+      if (result.requestId) job.requestIds.push(result.requestId);
+      await this.save(job);
+      await new SharedRooms(new DynamoRoomStore(this.db, this.clock), this.clock).publishAvatar(job.playerRoomId, job.owner, job.id).catch(() => {});
+      try { await this.assets.remove(job.id, `result-${job.token}.png`); await this.assets.remove(job.id, `receipt-${job.token}.json`); } catch { console.warn(JSON.stringify({ event: 'image_recovery_cleanup_deferred' })); } return;
+    }
     await this.assets.write(job.id, `${expression}.png`, normalized.image); job.completed[expression] = `${expression}.png`;
     if (!job.baseApproved) { await this.assets.write(job.id, 'base.png', result.image); job.baseRevision++; job.skin = normalized.skin; }
     const heads: Partial<Record<Expression, Buffer>> = {};
@@ -148,6 +169,9 @@ export class CloudJobs implements CharacterService {
         await this.assets.remove(job.id); job.status = 'expired'; job.sourcePresent = false; job.completed = {}; job.atlasRevision = 0; job.name = ''; job.fingerprint = ''; job.error = null;
         const expired = this.item(job); expired.gcKind = undefined; expired.gcAt = undefined; expired.version = job.revision + 1; job.revision++;
         try { await this.db.transact([this.db.write(expired, latest!.version)]); } catch (error) { if (!conflict(error)) throw error; }
+      } else if (job.playerRoomId && ['ready', 'failed', 'interrupted'].includes(job.status)) {
+        await this.assets.remove(job.id, 'source.jpg'); await this.assets.remove(job.id, 'upload.jpg'); job.sourcePresent = false;
+        try { await this.save(job); } catch (error) { if (!(error instanceof JobError && error.status === 409)) throw error; }
       } else if (job.status === 'generating' && (job.leaseUntil ?? Infinity) <= this.clock()) {
         let image: Buffer | undefined;
         try { image = await this.assets.read(job.id, `result-${job.token}.png`); } catch (error) { if (!['NoSuchKey', 'NotFound', 'ENOENT'].includes((error as Error).name) && (error as { code?: string }).code !== 'ENOENT') throw error; }
@@ -157,6 +181,7 @@ export class CloudJobs implements CharacterService {
           try { await this.finish(job, { image, usage: receipt.usage ?? null, requestId: receipt.requestId }); continue; } catch (error) { if (error instanceof JobError && error.status === 409) continue; }
         }
         job.status = 'interrupted'; job.error = { code: 'interrupted', message: 'This image request was interrupted and may have been charged. Completed faces are saved; retry only when ready.', canRetry: true, uncertain: true };
+        if (job.playerRoomId) { await this.assets.remove(job.id, 'source.jpg'); await this.assets.remove(job.id, 'upload.jpg'); job.sourcePresent = false; job.error.canRetry = false; }
         try { await this.save(job); } catch (error) { if (!(error instanceof JobError && error.status === 409)) throw error; }
       }
     }

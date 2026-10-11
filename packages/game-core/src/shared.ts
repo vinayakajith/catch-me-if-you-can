@@ -19,6 +19,7 @@ export interface SharedPlayerRecord extends SharedPlayer {
   search: HuntSnapshot['search']; lastHintAt: number | null;
   receipts: { seq: number; result: ActionResult }[];
   controls?: string[];
+  avatarJob?: string;
 }
 export interface SharedRound {
   id: string; seed: string; startedAt: number; endsAt: number; finishedAt: number | null;
