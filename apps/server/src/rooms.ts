@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { BALAJI, EXPIRY_MS, HOUSE, LocalHuntSession, MAX_PLAYERS, RESULTS_MS, ROUND_MS, balancedTargets, createFatherProfile, placementMix, placeTargets, targetSignature,
+import { BALAJI, EXPIRY_MS, HOUSE, LocalHuntSession, MAX_PLAYERS, MOVEMENT_BUFFER_MS, RESULTS_MS, ROUND_MS, balancedTargets, createFatherProfile, placementMix, placeTargets, targetSignature,
   type ActionResult, type CharacterPack, type CommandResponse, type ControlledAttempt, type HuntCommand, type RoomView } from '../../../packages/game-core/src/index.ts';
 import type { AssetStore, CharacterService } from './contracts.ts';
 import { JobError } from './jobs.ts';
@@ -136,7 +136,7 @@ export class Rooms {
       if (!attempt || attempt.id !== attemptId) throw new JobError(409, 'This attempt has been replaced.');
       if (attempt.controller !== hash(controller)) throw new JobError(409, 'This hunt is now controlled by another tab. Resume here to take over.');
       const session = this.session(player)!, now = this.clock(); session.tick();
-      attempt.moveCredit = Math.min(300, attempt.moveCredit + Math.max(0, now - attempt.creditAt)); attempt.creditAt = now;
+      attempt.moveCredit = Math.min(MOVEMENT_BUFFER_MS, attempt.moveCredit + Math.max(0, now - attempt.creditAt)); attempt.creditAt = now;
       const replies: CommandResponse['results'] = [];
       for (const command of commands) {
         if (command.seq <= attempt.ack) { const receipt = attempt.receipts.find(r => r.seq === command.seq); if (receipt) replies.push(receipt); continue; }

@@ -1,6 +1,6 @@
-import { LocalHuntSession, type ActionResult, type ControlledAttempt, type HuntCommand, type HuntSession, type HuntSnapshot, type Point } from '@catch-me-if-you-can/game-core';
-import { uploadKey } from './character-api';
-import { RoomApiError, RoomClient } from './room-api';
+import { LocalHuntSession, MOVEMENT_BUFFER_MS, type ActionResult, type ControlledAttempt, type HuntCommand, type HuntSession, type HuntSnapshot, type Point } from '@catch-me-if-you-can/game-core';
+import { uploadKey } from './character-api.ts';
+import { RoomApiError, RoomClient } from './room-api.ts';
 
 const failed = (message: string): ActionResult => ({ ok: false, kind: 'error', message });
 export class NetworkHuntSession implements HuntSession {
@@ -32,7 +32,7 @@ export class NetworkHuntSession implements HuntSession {
     this.local = new LocalHuntSession(view.me!.name, this.key, this.time, false, view.father!);
     if (resumed?.view.attempt) { this.attemptId = resumed.view.attempt.id; this.controller = resumed.controller; this.sequence = resumed.view.attempt.ack; this.local = LocalHuntSession.restore({ snapshot: resumed.view.attempt.snapshot, lastHintAt: null }, this.time); }
     this.snapshot = this.local.getSnapshot(); this.watchLocal();
-    this.timer = setInterval(() => { this.tick(); void this.flush(); }, 100);
+    this.timer = setInterval(() => { this.tick(); void this.flush(); }, 200);
     this.unsubscribe = client.subscribe(() => {
       const current = client.getSnapshot().view;
       if (current?.attempt?.id === this.attemptId && !this.inFlight && !this.pending.length) this.hydrate(current.attempt.snapshot);
@@ -61,8 +61,10 @@ export class NetworkHuntSession implements HuntSession {
   }
   move(direction: Point, deltaMs: number) {
     if (!this.attemptId || this.connection !== 'online' || this.local.getSnapshot().status !== 'playing' || Math.hypot(direction.x, direction.y) < .05) return;
-    if (this.pending.reduce((sum, c) => sum + (c.kind === 'move' ? c.deltaMs : 0), 0) >= 250) return;
-    const ms = Math.min(40, Math.max(0, deltaMs)); this.local.move(direction, ms);
+    const headroom = MOVEMENT_BUFFER_MS - this.pending.reduce((sum, c) => sum + (c.kind === 'move' ? c.deltaMs : 0), 0);
+    const ms = Math.min(40, Math.max(0, deltaMs), headroom);
+    if (!Number.isFinite(ms) || ms <= 0) return;
+    this.local.move(direction, ms);
     this.pending.push({ seq: ++this.sequence, kind: 'move', direction: { ...direction }, deltaMs: ms });
     this.snapshot = { ...this.local.getSnapshot(), connection: this.connection, connectionMessage: this.message, pendingActions: this.resolvers.size };
   }
@@ -96,7 +98,11 @@ export class NetworkHuntSession implements HuntSession {
       if (this.connection === 'reconnecting') this.retryAt = Date.now() + Math.min(60000, Math.max((error as RoomApiError).retryAfterMs || 0, Math.min(5000, 250 * 2 ** ++this.failures)));
       if (this.connection === 'replaced') { this.pending = []; for (const resolve of this.resolvers.values()) resolve(failed(this.message)); this.resolvers.clear(); }
       this.emit();
-    } finally { this.inFlight = false; }
+    } finally {
+      this.inFlight = false;
+      // A tap queued behind movement must not wait for the next batch timer.
+      if (this.pending.some(command => command.kind !== 'move')) void this.flush();
+    }
   }
   tick() { this.local.tick(); }
   dispose() {

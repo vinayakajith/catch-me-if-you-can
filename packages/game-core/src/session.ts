@@ -10,6 +10,7 @@ export const ROUND_MS = 2 * 60 * 1000;
 export const EXPIRY_MS = 60 * 60 * 1000;
 export const SEARCH_MS = 1000;
 export const HINT_MS = 20 * 1000;
+export const SPOT_GRACE_MS = 1000;
 
 export function placeTargets(seed: string): Target[] {
   const rng = random(seed), count = 12 + Math.floor(rng() * 9);
@@ -134,7 +135,7 @@ export class LocalHuntSession implements HuntSession {
       const slot = HOUSE.slots.find(s => s.id === target.slotId)!;
       // A visible face may duck during a short network trip. Only visibility gets
       // this bounded allowance; deadline and reach checks always use server time.
-      const seenAt = Number.isFinite(observedAt) ? Math.max(this.clock() - 250, Math.min(this.clock(), observedAt)) : this.clock();
+      const seenAt = Number.isFinite(observedAt) ? Math.max(this.clock() - SPOT_GRACE_MS, Math.min(this.clock(), observedAt)) : this.clock();
       if (slot.roomId !== this.state.player.roomId || !isDadExposed(this.state, slot, seenAt)) return this.error('Check the furniture to uncover him.');
     } else {
       const position = broomPosition(target, this.clock() - this.state.startedAt);

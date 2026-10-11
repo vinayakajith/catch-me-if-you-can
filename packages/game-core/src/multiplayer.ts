@@ -5,6 +5,9 @@ import { ROUND_MS } from './session.ts';
 import type { ActionResult, CharacterPack, HuntSnapshot, Point, Target } from './types.ts';
 
 export const MAX_PLAYERS = 5;
+// Bound prediction and server catch-up equally, while tolerating mobile RTTs.
+// Credit still accrues from server wall time; extra packets cannot add speed.
+export const MOVEMENT_BUFFER_MS = 1000;
 export const RESULTS_MS = 24 * 60 * 60 * 1000;
 export interface PlacementMix { visible: number; peek: number; search: number }
 export const targetSignature = (targets: Target[]) => targets.filter(t => t.kind === 'hidden').map(t => t.slotId).sort().join('|');

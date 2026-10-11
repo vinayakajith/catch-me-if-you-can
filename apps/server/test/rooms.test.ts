@@ -101,11 +101,29 @@ test('membership, names, movement budgets, sequence gaps, and tab takeover are e
     f.advance(1000);
     const commands = Array.from({ length: 80 }, (_, i) => ({ seq: i + 1, kind: 'move', direction: { x: 0, y: -1 }, deltaMs: 40 }));
     const flood = await host.request('POST', url, { controller: host.controller, commands });
-    assert.equal(flood.statusCode, 200); assert.ok(distance(flood.json().view.attempt.snapshot.player.position, HOUSE.spawn) <= 63.01);
+    assert.equal(flood.statusCode, 200); assert.ok(distance(flood.json().view.attempt.snapshot.player.position, HOUSE.spawn) <= 210.01);
     const newControl = randomUUID(); await host.request('POST', `/api/rooms/${room}/attempts/${attempt.id}/resume`, { controller: newControl });
     assert.equal((await host.request('POST', url, { controller: host.controller, commands: [] })).statusCode, 409);
     assert.equal((await host.request('POST', url, { controller: newControl, commands: [] })).statusCode, 200);
     assert.equal((await stranger.request('GET', `/api/rooms/${room}/state`)).json().attempt, null);
+  } finally { await f.close(); }
+});
+
+test('delayed movement retains elapsed walking time without granting extra speed', async () => {
+  const f = await fixture();
+  try {
+    const host = f.client();
+    const created = await host.request('POST', '/api/rooms', { name: 'Alan', fatherName: 'Balaji', characterId: 'sample-balaji' });
+    await start(host, created.json().room.id);
+    const url = `/api/rooms/${host.view!.room.id}/attempts/${host.view!.attempt!.id}/commands`;
+    const batch = () => Array.from({ length: 20 }, () => ({ seq: ++host.seq, kind: 'move', direction: { x: 1, y: 0 }, deltaMs: 40 }));
+    f.advance(800);
+    const delayed = await host.request('POST', url, { controller: host.controller, commands: batch() });
+    assert.equal(delayed.statusCode, 200, delayed.body);
+    const position = delayed.json().view.attempt.snapshot.player.position;
+    assert.ok(Math.abs(position.x - HOUSE.spawn.x - 168) < .01, 'An 800 ms packet carries 800 ms of walking');
+    const flood = await host.request('POST', url, { controller: host.controller, commands: batch() });
+    assert.deepEqual(flood.json().view.attempt.snapshot.player.position, position, 'Sending another packet cannot create elapsed time');
   } finally { await f.close(); }
 });
 

@@ -170,6 +170,23 @@ test('spotting cannot see other rooms or nonexistent targets, and a remembered t
   f.setTime(f.session.getSnapshot().endsAt); assert.equal(f.session.catch(id).ok, false);
 });
 
+test('a visible peek survives mobile delivery latency but old observations cannot reveal a hidden father', () => {
+  const slot = HOUSE.slots.find(s => s.mode === 'peek')!, f = fixture(seedWith(slot.id));
+  walkTo(f.session, slot.anchor);
+  const state = f.session.getSnapshot(), target = targetAt(f.session, slot.id);
+  let seen = -1;
+  for (let ms = 0; ms < 20000; ms += 20) {
+    if (peekProgress(state.seed, slot, ms) >= .2 && peekProgress(state.seed, slot, ms + 800) < .2 && peekProgress(state.seed, slot, ms + 1200) < .2 && peekProgress(state.seed, slot, ms + 2200) < .2) { seen = state.startedAt + ms; break; }
+  }
+  assert.ok(seen >= 0);
+  f.setTime(seen + 2200);
+  assert.equal(f.session.spot(target.id, seen).ok, false, 'A stale observation is clamped to the recent visibility window');
+  f.setTime(seen + 800);
+  assert.equal(f.session.spot(target.id, seen).ok, true, 'An 800 ms mobile delivery can preserve a face that was visible when tapped');
+  f.setTime(state.endsAt);
+  assert.equal(f.session.catch(target.id).ok, false, 'Visibility grace never extends the scoring deadline');
+});
+
 test('broom follows doorways at 160px/s with 6–10 second rests and no wall crossings', () => {
   for (let seed = 0; seed < 10; seed++) {
     const broom = placeTargets(`broom-${seed}`).find(t => t.kind === 'broom')!;

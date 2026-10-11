@@ -13,6 +13,11 @@ import { HOUSE, distance } from '../packages/game-core/src/index.ts';
 const directory = await mkdtemp(join(tmpdir(), 'father-multi-browser-'));
 const provider = new FixtureProvider(); let offset = 0;
 const { app, jobs } = await buildApp({ directory, provider, clock: () => Date.now() + offset });
+// Exercise actual server validation with mobile-like command latency, not
+// just a localhost round trip. This used to exhaust the 250 ms input buffer.
+app.addHook('onRequest', async request => {
+  if (request.url.endsWith('/commands')) await new Promise(resolve => setTimeout(resolve, 350));
+});
 const artifacts = fileURLToPath(new URL('../artifacts/', import.meta.url)); await mkdir(artifacts, { recursive: true });
 let browser, vite;
 const errors = [], pages = [], contexts = [];
