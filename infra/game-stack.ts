@@ -60,7 +60,9 @@ export class GameStack extends Stack {
       defaultRouteOptions: { integration: new integrations.WebSocketLambdaIntegration('Message', realtime) } });
     const socketStage = new gateway.WebSocketStage(this, 'SocketStage', { webSocketApi: sockets, stageName: 'live', autoDeploy: true });
     const rawSocketStage = socketStage.node.defaultChild as gateway.CfnStage;
-    rawSocketStage.defaultRouteSettings = { throttlingRateLimit: 100, throttlingBurstLimit: 50, dataTraceEnabled: false, loggingLevel: 'OFF' };
+    // Five players at 5 Hz produce 25 inputs and up to 125 callback deliveries
+    // per second. Leave room for catch broadcasts, heartbeats and short bursts.
+    rawSocketStage.defaultRouteSettings = { throttlingRateLimit: 500, throttlingBurstLimit: 250, dataTraceEnabled: false, loggingLevel: 'OFF' };
     sockets.grantManageConnections(realtime);
     api.addEnvironment('FH_SOCKET_ENDPOINT', socketStage.url);
     // Omit reservations in shared mode: new accounts may have only 10 slots,
@@ -103,10 +105,12 @@ export class GameStack extends Stack {
     // Observe the HTTP result and redacted worker events as well as Lambda errors.
     const imageFailures = new logs.MetricFilter(this, 'ImageFailureMetric', { logGroup: worker.logGroup, metricNamespace: 'CatchMeIfYouCan', metricName: `${this.stackName}-ImageFailures`, metricValue: '1', filterPattern: logs.FilterPattern.any(logs.FilterPattern.stringValue('$.event', '=', 'image_job_failed'), logs.FilterPattern.stringValue('$.event', '=', 'image_worker_retry')) });
     const httpThrottles = new logs.MetricFilter(this, 'HttpThrottleMetric', { logGroup: accessLogs, metricNamespace: 'CatchMeIfYouCan', metricName: `${this.stackName}-HttpThrottles`, metricValue: '1', filterPattern: logs.FilterPattern.stringValue('$.status', '=', '429') });
+    const deliveryFailures = new logs.MetricFilter(this, 'RealtimeDeliveryMetric', { logGroup: realtime.logGroup, metricNamespace: 'CatchMeIfYouCan', metricName: `${this.stackName}-RealtimeDeliveryFailures`, metricValue: '1', filterPattern: logs.FilterPattern.stringValue('$.event', '=', 'realtime_send_failed') });
     const alarms = [
       new watch.Alarm(this, 'ApiErrors', { metric: stage.metricServerError({ period: Duration.minutes(1) }), threshold: 5, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'RealtimeThrottles', { metric: realtime.metricThrottles({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'RealtimeErrors', { metric: realtime.metricErrors({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
+      new watch.Alarm(this, 'RealtimeDeliveryFailures', { metric: deliveryFailures.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 1 }),
       new watch.Alarm(this, 'ApiThrottles', { metric: api.metricThrottles({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'HttpThrottles', { metric: httpThrottles.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'ImageFailures', { metric: imageFailures.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 1 }),

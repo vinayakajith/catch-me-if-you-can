@@ -32,7 +32,8 @@ test('serverless infrastructure starts with private storage, isolated secrets an
       ThrottlingBurstLimit: { 'Fn::If': ['ReserveCapacity', 200, 10] },
       ThrottlingRateLimit: { 'Fn::If': ['ReserveCapacity', 100, 60] },
     } });
-    template.resourceCountIs('AWS::Logs::MetricFilter', 2);
+    template.resourceCountIs('AWS::Logs::MetricFilter', 3);
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', { StageName: 'live', DefaultRouteSettings: { ThrottlingRateLimit: 500, ThrottlingBurstLimit: 250, DataTraceEnabled: false, LoggingLevel: 'OFF' } });
     template.hasResourceProperties('AWS::CloudWatch::Alarm', { Namespace: 'AWS/ApiGateway', MetricName: '5xx' });
     const functions = template.findResources('AWS::Lambda::Function') as Record<string, any>;
     const reservedCaps: Record<string, number> = { 'api.handler': 20, 'workers.imageHandler': 2, 'workers.cleanupHandler': 1 };

@@ -58,11 +58,11 @@ export class Realtime {
   async message(id: string, raw: string) {
     let request: SharedRequest | undefined;
     try {
-      const c = await this.store.get(id); if (!c) throw new JobError(403, 'Reconnect to the room.');
       if (Buffer.byteLength(raw) > 24000) throw new JobError(413, 'Game message is too large.');
-      if (!await this.limiter.take('socket:' + c.owner, 900, 60000, this.shared.clock())) throw new JobError(429, 'Give the controls a moment.');
       try { request = JSON.parse(raw); } catch { throw new JobError(400, 'Invalid game message.'); }
       if (!request || !['hello', 'ping', 'ready', 'start', 'rematch', 'leave', 'input'].includes(request.kind)) throw new JobError(400, 'Invalid game message.');
+      const c = await this.store.get(id); if (!c) throw new JobError(403, 'Reconnect to the room.');
+      if (!await this.limiter.take('socket:' + c.owner, 900, 60000, this.shared.clock())) throw new JobError(429, 'Give the controls a moment.');
       const { view, results } = await this.shared.handle(c.roomId, c.owner, id, request);
       const connections = await this.store.list(c.roomId);
       const room = await this.shared.store.get(c.roomId);
