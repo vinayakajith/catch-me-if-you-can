@@ -31,11 +31,14 @@ Earlier independent-room HTTP load, 11 October 2026: 600 seconds, **34,804 reque
 
 Shared WebSocket load, 11 October 2026: 180 seconds, five real sockets against DynamoDB Local with 150 ms simulated RTT, **4,217 responses, zero failures, 38 catches across two rounds**. Peer movement p95 was **278 ms** over 9,436 samples; response p95 was 268 ms. The test requires peer p95 below 500 ms. These figures are local measurements; repeat a five-phone check after deployment.
 
+
+Live AWS shared-room verification, 11 October 2026: **4,401 responses, zero failed commands, 38 catches across 2 rounds** with five concurrent clients over 182 seconds. Response p95 was **189 ms** and peer-update p95 was **198 ms** over 8,823 samples. The test observed one handled late callback error; it did not lose a command or disconnect a player. The full five-browser two-minute game also passed with zero browser exceptions, including mobile results, refresh and rematch. Tests used sample artwork and made no paid image requests. These are measured runs, not a latency guarantee for every device or network.
+
 The history scan covers reachable Git objects, not private chat transcripts, deleted remote repositories or every third-party system. A key previously shared in chat should be replaced for production. There were no additional paid image calls in this implementation phase.
 
 ## Boundaries to verify at deployment
 
-- Real CloudFront, DNS/ACM, S3 CORS, IAM and live concurrency require the domain smoke tests in [AWS.md](AWS.md). No production stack was deployed during this review.
+- The owner authorized deployment on 11 October 2026. Five independent browsers passed a real two-minute game through CloudFront, the custom HTTPS domain and the authenticated AWS WebSocket endpoint, including catches, refresh, mobile results and rematch. Real paid image generation and its S3 upload path were not repeated; image workflows, ownership and expiry were verified with fixtures. See [AWS.md](AWS.md) for repeatable live checks.
 - Signed images are bearer URLs during their short validity; authorized players can save or screenshot images. Expiry cannot revoke copies already downloaded.
 - Anonymous cookies provide session ownership, not verified identity. Names can be impersonated across rooms. Clearing cookies loses access; there is no account recovery flow.
 - The browser necessarily receives hidden-object positions for rendering. Server validation blocks invalid movement/claims, but a modified client can automate discovery. This is a friends’ game, not an anti-cheat system.

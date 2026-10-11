@@ -41,6 +41,7 @@ Use Node 24+, npm and Docker. These checks create only temporary local resources
 npm ci
 npm test
 npm run build:aws
+npm run test:production
 npm run test:infra
 npm run infra:synth
 npm run test:lambda
@@ -128,19 +129,28 @@ Invalid access/quota responses pause generation for five minutes and preserve fa
 
 ## Verify through the real domain
 
-- With images disabled, share one named sample room, join from five independent browsers and reject a sixth seat. Check secure HTTP-only cookies and the canonical invite hostname.
+- Using sample artwork (no paid generation), share one named sample room, join from five independent browsers and reject a sixth seat. Check secure HTTP-only cookies and the canonical invite hostname.
 - Join the same shared lobby from five browsers. Ready everyone, start from the host, verify one countdown and visible movement. Race for the same father: exactly one score must increase. Check mobile practice, one-tap navigation, desktop board, mobile results, reconnect, refresh, host transfer and rematches.
 - Create a game from each participant’s results. Verify distinct links, empty boards and fresh hour windows. Use a controlled test fixture for closure and the additional 24-hour results/artwork boundary.
 - Confirm strangers cannot read private jobs, photos or room atlases. Direct S3 reads and direct gateway calls must fail. API failures must not become HTML.
 - In a fixture-only test deployment, verify upload CORS, signed-image redirects, SQS duplicate delivery, outbox recovery and cleanup before a separately approved real likeness test.
 
+The two opt-in live checks create disposable sample rooms and spend no image allowance:
+
+```bash
+node scripts/live-shared-browser-check.mjs https://catchmeifyoucan.space
+node scripts/shared-load-check.mjs --live-url https://catchmeifyoucan.space
+```
+
+The first uses five independent Chromium contexts, including mobile layouts, through an actual two-minute round. The second sustains five moving/catching WebSockets for three minutes over the deployed gateway and DynamoDB. On 11 October 2026 the live load check passed 4,401 responses with zero failed commands and 198 ms peer p95 across two rounds. Both save results in ignored `artifacts/`. They do not replace a physical-phone friend playtest.
+
 ## Limits, monitoring and recovery
 
-Shared mode starts at 60 API requests/second, burst 10, using the account's available concurrency. Reserved mode allows 100 requests/second, burst 200, with a cap of 20 concurrent HTTP Lambdas. Shared movement sends up to five WebSocket batches per second; idle connections heartbeat every two seconds. Legacy rooms additionally poll twice per second; actions can flush sooner. These are starting limits, not unlimited public capacity; adjust after measuring the deployed service. Gateway throttles are best-effort targets, not spending caps. Creation limits are atomic across instances. Photo creation also has a global 20-job/day limit. The image queue processes at most two invocations concurrently in either mode. The 300-second worker uses a 1,800-second queue visibility timeout, following [AWS SQS guidance](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html).
+Shared mode starts at 60 API requests/second, burst 10, using the account's available concurrency. Reserved mode allows 100 requests/second, burst 200, with a cap of 20 concurrent HTTP Lambdas. Shared movement sends up to five WebSocket batches per second; idle connections heartbeat every two seconds. Legacy rooms additionally poll twice per second; actions can flush sooner. The WebSocket stage allows 500 requests/second with a burst of 250: five players at five inputs/second produce up to 125 outgoing deliveries/second, in addition to incoming messages. A lower callback limit caused live 429 errors during the first sustained test. These are starting limits, not unlimited public capacity; adjust after measuring the deployed service. Gateway throttles are best-effort targets, not spending caps. Creation limits are atomic across instances. Photo creation also has a global 20-job/day limit. The image queue processes at most two invocations concurrently in either mode. The 300-second worker uses a 1,800-second queue visibility timeout, following [AWS SQS guidance](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html).
 
 The browser predicts up to one second of unconfirmed walking. The server accepts the same bounded backlog using elapsed server time and still validates each collision step, sequence, catch and deadline. Face visibility allows one second of delivery delay; that allowance never extends the round timer or catch distance. Five-browser tests inject 350 ms command latency as well as throttling and lost receipts. If players report slow walking, check rendering and round-trip latency alongside Lambda duration and throttles; increasing Lambda capacity alone cannot repair a client that stalls while awaiting acknowledgements.
 
-CloudWatch has a dashboard and alarms for API failures/throttles, image failures/backlog, dead letters and cleanup failures. Logs retain seven days without request bodies, cookies or raw provider errors. No email or external notification subscription is created automatically.
+CloudWatch has a dashboard and alarms for API failures/throttles, realtime delivery failures, image failures/backlog, dead letters and cleanup failures. Handled callback errors are counted from redacted structured logs because they do not increment Lambda’s error metric. Transient callback failures preserve the player’s session; only a Gone response removes the connection. Logs retain seven days without request bodies, cookies or raw provider errors. No email or external notification subscription is created automatically.
 
 Cleanup runs each minute. Access deadlines are enforced on requests; [DynamoDB TTL is asynchronous physical deletion](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html). Player source photos are removed after processing and player faces expire with the one-hour room; father source photos are removed at finalization and unfinished father jobs expire after 24 hours and incomplete direct uploads after 15 minutes. Room art lasts through the one-hour game plus 24-hour results window. S3’s three-day lifecycle bounds orphan retention during failures.
 

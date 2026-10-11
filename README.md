@@ -8,7 +8,7 @@ New invites now put **2–5 players in one shared house**. Join the lobby, optio
 
 The father character still uses one approved likeness plus five expressions. The waiting-room player portrait uses one laughing image for every witch animation and does not delay starting. Original player photos are deleted after processing; game faces expire with the one-hour room. The prior independent-room protocol and solo play remain compatible.
 
-The app is hosted on AWS at `https://catchmeifyoucan.space`. This shared-room update must be deployed by the project owner after reviewing the CDK diff; local tests do not update the live site. The production image allowance is $15 lifetime, while the development ledger remains capped at $1.
+The shared-room update was deployed with the owner’s authorization on 11 October 2026 at **https://catchmeifyoucan.space**. Create a new invite for the shared house; older independent invites retain their original protocol. The production image allowance is $15 lifetime, while the development ledger remains capped at $1.
 
 The spotlighted Liberty pose is a guaranteed easy catch. He is deadly serious, holding a flashlight and notebook in his lungi. A wall portrait is serious too. Other hiding dads laugh: tumbling in a washer, spinning in a microwave, cramped in a wardrobe, upside-down in a pickle jar, inside the commode, and elsewhere. Under the bed, only his lungi hem and legs show. Opening a container reveals its occupant without awarding a point.
 
@@ -77,6 +77,7 @@ npm run test:browser
 npm run test:characters
 npm run test:multiplayer
 npm run test:shared
+npm run test:production # built frontend under the production browser security policy
 npm run test:load:shared # three minutes, five sockets on DynamoDB Local
 npm run test:load
 npm run test:aws       # Docker: local DynamoDB only
@@ -104,6 +105,8 @@ Live development trial, 11 October 2026: the bundled fictional Balaji reference 
 Local five-agent load result, 11 October 2026: **35,642 requests, zero failures, 425 accepted catches, and 20 completed attempts** in ten minutes. API latency was **8.32 ms p95 / 12.31 ms p99**; other agents observed catches within **460 ms p95**. Gameplay and photo browser checks were also running on the same computer. This measures the local service, not physical-phone networking or AWS.
 
 DynamoDB Local five-player load, 11 October 2026: **34,804 requests, zero failures, 300 catches and 20 completed attempts** in ten minutes. API latency was **85.11 ms p95 / 139.44 ms p99**; peer notices were **516 ms p95**. See [the security review](docs/SECURITY.md) for scope and [the AWS guide](docs/AWS.md) for deployment and live checks.
+
+Live AWS shared-house test, 11 October 2026: **five players, 4,401 responses, zero failed commands and 38 catches across two rounds** in three minutes. Peer updates were **198 ms p95**. A full five-browser game verified catches, mobile navigation/results, refresh and rematch. See the security review for measurement scope.
 
 `npm run build` typechecks the application and builds the static frontend into `apps/web/dist`. `npm run preview` serves that build locally.
 
