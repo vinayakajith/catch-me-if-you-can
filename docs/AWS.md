@@ -82,9 +82,11 @@ aws lambda get-account-settings \
   --query AccountLimit --output json --no-cli-pager
 ```
 
-New accounts can start with only 10 concurrent executions. This stack reserves 23 (20 API, two image workers and one cleanup), and [Lambda requires another 100 to remain unreserved](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html). At least 123 unreserved executions must therefore be available before this stack's first deployment. Other applications' reservations also consume the account's quota.
+New accounts can start with only 10 concurrent executions. For an initial sample-artwork deployment, explicitly select `ConcurrencyMode=shared`. It omits function reservations and uses the account's existing shared pool, so a quota increase is not a prerequisite. API Gateway allows 60 requests/second with a burst of 10; SQS still limits image-job processing to two concurrent invocations. Keep `ImageEnabled=false` and `ImageBudgetMicros=0` for the first deployment. All functions compete for the shared pool, so cold starts, cleanup and other applications can cause throttling. Verify five concurrent players through the real domain before wider sharing; local tests do not prove AWS capacity.
 
-If the account limit is too low, request an increase for **AWS Lambda → Concurrent executions** in Service Quotas in the deployment region. Although 200 is sufficient for this stack in an otherwise unused account, the request API can reject values below the AWS default of 1,000 even when the applied account limit is only 10. If it reports that the requested value must exceed 1,000, request 1,001 or contact AWS Support about restoring the standard quota. Wait for the applied limit to increase before deploying; a submitted request alone does not change it. Raising the quota does not enable image generation or change the application's per-function caps.
+`ConcurrencyMode=reserved` preserves the original per-function caps: 20 API, two image workers and one cleanup. It remains the parameter default so an existing deployment's caps cannot disappear implicitly. [Lambda requires another 100 to remain unreserved](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html), so at least 123 unreserved executions must be available before a first deployment in reserved mode. A switch from shared to reserved mode requires sufficient capacity too. Other applications' reservations also consume the account's quota.
+
+To increase capacity later, request **AWS Lambda → Concurrent executions** in Service Quotas in the deployment region. Although 200 is sufficient for this stack in an otherwise unused account, the request API can reject values below the AWS default of 1,000 even when the applied account limit is only 10. If it reports that the requested value must exceed 1,000, request 1,001 or contact AWS Support about restoring the standard quota. Wait for the applied limit to increase before selecting reserved mode; a submitted request alone does not change it. Approval does not automatically change the stack's mode or enable image generation. After approval, redeploy with `ConcurrencyMode=reserved` to isolate function capacity.
 
 ## Deployment
 
@@ -97,6 +99,7 @@ If the account limit is too low, request an increase for **AWS Lambda → Concur
      --profile catch-me-if-you-can \
      --parameters DomainName=play.example.com \
      --parameters CertificateArn=YOUR_ISSUED_US_EAST_1_CERTIFICATE_ARN \
+     --parameters ConcurrencyMode=shared \
      --parameters ImageEnabled=false \
      --parameters ImageBudgetMicros=0 \
      --outputs-file artifacts/aws-outputs.json
@@ -126,7 +129,7 @@ Invalid access/quota responses pause generation for five minutes and preserve fa
 
 ## Limits, monitoring and recovery
 
-The starting service-wide API throttle is 100 requests/second, burst 200, with 20 concurrent HTTP Lambdas. A moving player can send ten batches and two polls per second. These are starting limits, not unlimited public capacity; adjust after measuring the deployed service. Creation limits are atomic across instances. Photo creation also has a global 20-job/day limit. Image concurrency is 2. The 300-second worker uses a 1,800-second queue visibility timeout, following [AWS SQS guidance](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html).
+Shared mode starts at 60 API requests/second, burst 10, using the account's available concurrency. Reserved mode allows 100 requests/second, burst 200, with a cap of 20 concurrent HTTP Lambdas. A moving player can send ten batches and two polls per second. These are starting limits, not unlimited public capacity; adjust after measuring the deployed service. Gateway throttles are best-effort targets, not spending caps. Creation limits are atomic across instances. Photo creation also has a global 20-job/day limit. The image queue processes at most two invocations concurrently in either mode. The 300-second worker uses a 1,800-second queue visibility timeout, following [AWS SQS guidance](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html).
 
 CloudWatch has a dashboard and alarms for API failures/throttles, image failures/backlog, dead letters and cleanup failures. Logs retain seven days without request bodies, cookies or raw provider errors. No email or external notification subscription is created automatically.
 

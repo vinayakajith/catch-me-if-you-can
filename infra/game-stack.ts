@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Stack, Duration, RemovalPolicy, CfnParameter, CfnOutput, Fn, type StackProps,
+import { Stack, Duration, RemovalPolicy, CfnParameter, CfnOutput, CfnCondition, Aws, Fn, Token, type StackProps,
   aws_s3 as s3, aws_dynamodb as dynamo, aws_lambda as lambda, aws_lambda_event_sources as sources,
   aws_sqs as sqs, aws_secretsmanager as secrets, aws_iam as iam, aws_logs as logs,
   aws_apigatewayv2 as gateway, aws_apigatewayv2_integrations as integrations, aws_apigateway as restGateway,
@@ -18,6 +18,9 @@ export class GameStack extends Stack {
     const certificateArn = new CfnParameter(this, 'CertificateArn', { type: 'String', description: 'Issued ACM certificate in us-east-1 covering DomainName.', allowedPattern: '^arn:aws:acm:us-east-1:[0-9]{12}:certificate/.+$' });
     const imageEnabled = new CfnParameter(this, 'ImageEnabled', { type: 'String', default: 'false', allowedValues: ['false', 'true'], description: 'Enable only after a fresh production key and image budget are explicitly approved.' });
     const imageBudget = new CfnParameter(this, 'ImageBudgetMicros', { type: 'Number', default: 0, minValue: 0, maxValue: 1000000000, description: 'Lifetime production allowance in microdollars ($1 = 1000000). No automatic resets.' });
+    const concurrencyMode = new CfnParameter(this, 'ConcurrencyMode', { type: 'String', default: 'reserved', allowedValues: ['shared', 'reserved'], description: 'Use shared for an initial launch within a new account quota; reserved requires at least 123 available executions before first deployment.' });
+    const reserveCapacity = new CfnCondition(this, 'ReserveCapacity', { expression: Fn.conditionEquals(concurrencyMode.valueAsString, 'reserved') });
+    const capacity = (reserved: number, shared: number | string) => Token.asNumber(Fn.conditionIf(reserveCapacity.logicalId, reserved, shared));
     const publicOrigin = Fn.join('', ['https://', domain.valueAsString]);
     const table = new dynamo.Table(this, 'State', { partitionKey: { name: 'pk', type: dynamo.AttributeType.STRING }, sortKey: { name: 'sk', type: dynamo.AttributeType.STRING }, billingMode: dynamo.BillingMode.PAY_PER_REQUEST,
       encryption: dynamo.TableEncryption.AWS_MANAGED, stream: dynamo.StreamViewType.NEW_IMAGE, timeToLiveAttribute: 'ttl', deletionProtection: true, removalPolicy: RemovalPolicy.RETAIN });
@@ -46,9 +49,11 @@ export class GameStack extends Stack {
     const worker = fn('ImageWorker', 'workers.imageHandler', 300, 2048, { FH_OPENAI_SECRET_ARN: key.secretArn });
     const dispatcher = fn('Dispatcher', 'workers.dispatchHandler', 30, 256);
     const cleanup = fn('Cleanup', 'workers.cleanupHandler', 120, 1024);
-    (worker.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = 2;
-    (api.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = 20;
-    (cleanup.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = 1;
+    // Omit reservations in shared mode: new accounts may have only 10 slots,
+    // while any positive reservation requires 100 additional unreserved slots.
+    (worker.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = capacity(2, Aws.NO_VALUE);
+    (api.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = capacity(20, Aws.NO_VALUE);
+    (cleanup.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = capacity(1, Aws.NO_VALUE);
     for (const service of [api, worker, cleanup]) {
       service.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:GetItem', 'dynamodb:Query', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem', 'dynamodb:ConditionCheckItem'], resources: [table.tableArn, `${table.tableArn}/index/*`] }));
       service.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'], resources: [assets.arnForObjects('*')] }));
@@ -63,7 +68,7 @@ export class GameStack extends Stack {
     new events.Rule(this, 'CleanupSchedule', { schedule: events.Schedule.rate(Duration.minutes(1)), targets: [new targets.LambdaFunction(cleanup, { retryAttempts: 2 })] });
     const http = new gateway.HttpApi(this, 'Http', { apiName: 'Catch Me If You Can', createDefaultStage: false, defaultIntegration: new integrations.HttpLambdaIntegration('Proxy', api) });
     const accessLogs = new logs.LogGroup(this, 'HttpLogs', { retention: logs.RetentionDays.ONE_WEEK, removalPolicy: RemovalPolicy.DESTROY });
-    const stage = new gateway.HttpStage(this, 'HttpStage', { httpApi: http, stageName: '$default', autoDeploy: true, throttle: { rateLimit: 100, burstLimit: 200 }, accessLogSettings: { destination: new gateway.LogGroupLogDestination(accessLogs), format: restGateway.AccessLogFormat.custom(JSON.stringify({ requestId: '$context.requestId', status: '$context.status', route: '$context.routeKey', latency: '$context.responseLatency' })) } });
+    const stage = new gateway.HttpStage(this, 'HttpStage', { httpApi: http, stageName: '$default', autoDeploy: true, throttle: { rateLimit: capacity(100, 60), burstLimit: capacity(200, 10) }, accessLogSettings: { destination: new gateway.LogGroupLogDestination(accessLogs), format: restGateway.AccessLogFormat.custom(JSON.stringify({ requestId: '$context.requestId', status: '$context.status', route: '$context.routeKey', latency: '$context.responseLatency' })) } });
     const requestPolicy = new cloudfront.OriginRequestPolicy(this, 'GameRequests', { cookieBehavior: cloudfront.OriginRequestCookieBehavior.allowList('fh-owner'), queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(), headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList('Origin', 'Content-Type', 'Idempotency-Key', 'X-FH-Request', 'CloudFront-Viewer-Address') });
     const security = new cloudfront.ResponseHeadersPolicy(this, 'BrowserSecurity', { securityHeadersBehavior: {
       contentTypeOptions: { override: true }, frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true }, referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true }, strictTransportSecurity: { accessControlMaxAge: Duration.days(365), override: true },

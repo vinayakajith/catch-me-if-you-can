@@ -18,17 +18,28 @@ test('serverless infrastructure starts with private storage, isolated secrets an
     const stack = new GameStack(app, 'TestGame', { artifactRoot: root, webRoot: `${root}/web`, env: { account: '123456789012', region: 'ap-south-1' } });
     const template = Template.fromStack(stack), data = template.toJSON(); app.synth();
     assert.equal(data.Parameters.ImageEnabled.Default, 'false'); assert.equal(data.Parameters.ImageBudgetMicros.Default, 0);
+    assert.deepEqual(data.Parameters.ConcurrencyMode.AllowedValues, ['shared', 'reserved']);
+    assert.equal(data.Parameters.ConcurrencyMode.Default, 'reserved', 'Existing deployments retain their function caps unless shared mode is explicitly selected');
+    assert.deepEqual(data.Conditions.ReserveCapacity, { 'Fn::Equals': [{ Ref: 'ConcurrencyMode' }, 'reserved'] });
     template.resourceCountIs('AWS::DynamoDB::Table', 1);
     template.hasResourceProperties('AWS::DynamoDB::Table', { BillingMode: 'PAY_PER_REQUEST', TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true }, StreamSpecification: { StreamViewType: 'NEW_IMAGE' }, DeletionProtectionEnabled: true });
     for (const bucket of Object.values(template.findResources('AWS::S3::Bucket')) as any[]) assert.deepEqual(bucket.Properties.PublicAccessBlockConfiguration, { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true });
     template.hasResourceProperties('AWS::S3::Bucket', { LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ ExpirationInDays: 3 })]) }, CorsConfiguration: { CorsRules: Match.arrayWith([Match.objectLike({ AllowedMethods: ['GET', 'HEAD', 'POST'], AllowedOrigins: [Match.anyValue()] })]) } });
     template.hasResourceProperties('AWS::SQS::Queue', { VisibilityTimeout: 1800, RedrivePolicy: { maxReceiveCount: 3, deadLetterTargetArn: Match.anyValue() } });
-    template.hasResourceProperties('AWS::Lambda::Function', { Handler: 'workers.imageHandler', Timeout: 300, ReservedConcurrentExecutions: 2, Runtime: 'nodejs24.x', Architectures: ['x86_64'] });
+    template.hasResourceProperties('AWS::Lambda::Function', { Handler: 'workers.imageHandler', Timeout: 300, Runtime: 'nodejs24.x', Architectures: ['x86_64'] });
     template.hasResourceProperties('AWS::Lambda::EventSourceMapping', { BatchSize: 1, FunctionResponseTypes: ['ReportBatchItemFailures'], ScalingConfig: { MaximumConcurrency: 2 } });
-    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', { DefaultRouteSettings: { ThrottlingBurstLimit: 200, ThrottlingRateLimit: 100 } });
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', { DefaultRouteSettings: {
+      ThrottlingBurstLimit: { 'Fn::If': ['ReserveCapacity', 200, 10] },
+      ThrottlingRateLimit: { 'Fn::If': ['ReserveCapacity', 100, 60] },
+    } });
     template.resourceCountIs('AWS::Logs::MetricFilter', 2);
     template.hasResourceProperties('AWS::CloudWatch::Alarm', { Namespace: 'AWS/ApiGateway', MetricName: '5xx' });
     const functions = template.findResources('AWS::Lambda::Function') as Record<string, any>;
+    const reservedCaps: Record<string, number> = { 'api.handler': 20, 'workers.imageHandler': 2, 'workers.cleanupHandler': 1 };
+    for (const fn of Object.values(functions)) {
+      const cap = reservedCaps[fn.Properties.Handler];
+      assert.deepEqual(fn.Properties.ReservedConcurrentExecutions, cap === undefined ? undefined : { 'Fn::If': ['ReserveCapacity', cap, { Ref: 'AWS::NoValue' }] }, 'Shared mode must remove every reservation, including deployment helpers');
+    }
     const api = Object.values(functions).find(r => r.Properties.Handler === 'api.handler');
     assert.equal(api.Properties.Environment.Variables.FH_OPENAI_SECRET_ARN, undefined);
     assert.match(JSON.stringify(api.Properties.Environment.Variables.FH_ORIGIN_SECRET), /resolve:secretsmanager/);
