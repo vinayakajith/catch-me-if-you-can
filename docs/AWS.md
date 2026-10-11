@@ -84,7 +84,7 @@ aws lambda get-account-settings \
 
 New accounts can start with only 10 concurrent executions. This stack reserves 23 (20 API, two image workers and one cleanup), and [Lambda requires another 100 to remain unreserved](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html). At least 123 unreserved executions must therefore be available before this stack's first deployment. Other applications' reservations also consume the account's quota.
 
-If the account limit is too low, request an increase for **AWS Lambda → Concurrent executions** in Service Quotas in the deployment region. A limit of 200 is sufficient for this stack in an otherwise unused account. Wait for the applied limit to increase before deploying; a submitted request alone does not change it. Raising the quota does not enable image generation or change the application's per-function caps.
+If the account limit is too low, request an increase for **AWS Lambda → Concurrent executions** in Service Quotas in the deployment region. Although 200 is sufficient for this stack in an otherwise unused account, the request API can reject values below the AWS default of 1,000 even when the applied account limit is only 10. If it reports that the requested value must exceed 1,000, request 1,001 or contact AWS Support about restoring the standard quota. Wait for the applied limit to increase before deploying; a submitted request alone does not change it. Raising the quota does not enable image generation or change the application's per-function caps.
 
 ## Deployment
 
