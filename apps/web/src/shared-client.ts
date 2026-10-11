@@ -48,6 +48,9 @@ export class SharedClient {
   }
   private receive = (event: MessageEvent) => {
     let m: SharedMessage; try { m = JSON.parse(event.data); } catch { return; }
+    // Gateway-level failures do not use our game envelope or request IDs.
+    // Reconnect and replay pending receipts instead of accepting an empty state.
+    if (!['state', 'motion', 'error'].includes(m.type)) { this.ws?.close(); return; }
     this.lastMessage = Date.now();
     const waiting = m.requestId ? this.pending.get(m.requestId) : undefined;
     if (waiting) this.pending.delete(m.requestId!);

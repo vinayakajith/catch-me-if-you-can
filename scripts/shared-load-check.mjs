@@ -41,9 +41,15 @@ try {
   for (let i = 0; i < 5; i++) {
     const issued = liveUrl ? await http(i, `/api/rooms/${id}/ticket`, {}) : { ticket: await server.realtime.issue(id, 'owner' + i, address), endpoint: address.replace('http:', 'ws:') + '/api/realtime' };
     const ws = new WebSocket(issued.endpoint + '?ticket=' + issued.ticket, { origin: address });
+    if (liveUrl) {
+      ws.on('close', (code, reason) => console.log(`Live socket ${i + 1} closed: ${code} ${reason.toString()}`));
+      ws.on('error', error => console.error(`Live socket ${i + 1}: ${error.message}`));
+    }
     const c = { ws, view: null, pending: new Map(), seq: 0, round: '', path: [], slot: null, catches: 0 };
     ws.on('message', bytes => {
       const m = JSON.parse(bytes.toString()); messages++;
+      if (liveUrl && !['state', 'motion', 'error'].includes(m.type)) console.error('Gateway response:', m.message ?? 'Unknown frame');
+      if (liveUrl && m.type === 'error' && !c.pending.has(m.requestId)) console.error('Unmatched game error:', m.message);
       if (m.type === 'state') {
         const old = c.view; c.view = m.view;
         if (old && old.round?.id === m.view.round?.id) c.view.players = c.view.players.map(p => { const previous = old.players.find(o => o.id === p.id); return previous && previous.revision > p.revision ? previous : p; });
@@ -64,6 +70,7 @@ try {
     clients.push(c); await c.send({ kind: 'hello' }); await c.send({ kind: 'ready', ready: true });
   }
   await clients[0].send({ kind: 'start' });
+  if (liveUrl) console.log('Five live sockets connected; shared hunt started.');
   const started = Date.now(), duration = Number(process.env.FH_SHARED_LOAD_SECONDS ?? 180) * 1000;
   let rounds = 1, totalCaught = 0;
   await Promise.all(clients.map(async (c, index) => {

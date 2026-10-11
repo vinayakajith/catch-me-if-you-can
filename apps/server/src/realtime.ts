@@ -74,9 +74,16 @@ export class Realtime {
         const own = peer.id === id;
         const message: SharedMessage = moving ? { type: 'motion', roundId: view.round!.id, player: view.players.find(p => p.id === view.me)!, serverNow: view.serverNow, ...(own ? { requestId: request!.requestId } : {}) }
           : { type: 'state', view: { ...view, me: record.id }, ...(own ? { requestId: request!.requestId, results } : {}) };
-        try { await this.send(peer.id, message); } catch { await this.disconnect(peer.id); }
+        try { await this.send(peer.id, message); } catch (error) {
+          const detail = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+          // A transient gateway failure must not invalidate a healthy player's
+          // session. Only API Gateway's explicit Gone response proves closure.
+          if (detail.name === 'GoneException' || detail.$metadata?.httpStatusCode === 410 || error instanceof Error && error.message === 'Closed socket') await this.disconnect(peer.id);
+          else { console.error(JSON.stringify({ event: 'realtime_send_failed', name: detail.name ?? 'Unknown', status: detail.$metadata?.httpStatusCode })); throw error; }
+        }
       }));
     } catch (error) {
+      if (!(error instanceof JobError)) console.error(JSON.stringify({ event: 'realtime_failed', name: error instanceof Error ? error.name : 'Unknown' }));
       const e = error instanceof JobError ? error : new JobError(503, 'Reconnecting to the house…');
       const requestId = typeof request?.requestId === 'string' && /^[\w-]{1,80}$/.test(request.requestId) ? request.requestId : undefined;
       await this.send(id, { type: 'error', message: e.message, requestId, retryable: e.status >= 500 || e.status === 429 }).catch(() => {});

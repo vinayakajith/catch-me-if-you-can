@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -45,6 +45,16 @@ test('five real sockets authenticate once, broadcast movement and award one shar
     for (let i = 0; i < 5; i++) { const m = await send(i, { kind: 'ping' }); assert.equal(m.type === 'state' && m.view.players.reduce((a, p) => a + p.score, 0), 1); }
     const malformed = await send(0, { kind: 'input', roundId: round.id, commands: [{ seq: 3, kind: 'move', direction: { x: 1, y: 0 }, deltaMs: 10000 }] });
     assert.equal(malformed.type, 'error');
+    const originalSend = server.realtime.send; let failedDelivery = false;
+    const delivery = mock.method(server.realtime, 'send', async (id: string, message: SharedMessage) => {
+      if (!failedDelivery) { failedDelivery = true; throw Object.assign(new Error('Fixture gateway outage'), { name: 'LimitExceededException' }); }
+      return originalSend(id, message);
+    });
+    const interrupted = await send(0, { kind: 'ping' });
+    assert.equal(interrupted.type, 'error'); assert.equal(interrupted.type === 'error' && interrupted.retryable, true);
+    assert.equal((await server.realtime.store.list(id)).length, 5, 'Transient delivery errors retain all five connections');
+    assert.equal((await send(0, { kind: 'ping' })).type, 'state');
+    delivery.mock.restore();
     const token = await server.realtime.issue(id, 'owner-0', address);
     await assert.rejects(server.realtime.connect('wrong-origin', token, 'https://elsewhere.example'), /reconnect/);
   } finally { for (const ws of sockets) ws.terminate(); await new Promise(r => setTimeout(r, 50)); await server.app.close(); await rm(directory, { recursive: true, force: true }); }
