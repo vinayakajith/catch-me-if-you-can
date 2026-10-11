@@ -3,8 +3,9 @@ import { isDeepStrictEqual } from 'node:util';
 import { Database, conflict, type Item, type Write } from './database.ts';
 const pk = (id: string) => `ROOM#${id}`;
 function rows(room: RoomRecord) {
-  const { players, events, ...meta } = room;
+  const { players, events, shared, ...meta } = room;
   const result = new Map<string, unknown>([['META', { ...meta, playerIds: players.map(p => p.id) }]]);
+  if (shared) result.set('SHARED', shared);
   for (const { attempt, ...player } of players) { result.set(`PLAYER#${player.id}`, player); if (attempt) result.set(`ATTEMPT#${player.id}`, attempt); }
   for (const event of events) result.set(`EVENT#${String(event.id).padStart(12, '0')}`, event);
   return result;
@@ -19,6 +20,7 @@ export class DynamoRoomStore implements RoomStore {
     delete (room as RoomRecord & { playerIds?: string[] }).playerIds;
     // The rules mutate nested checkpoints and receipts. Keep a detached baseline
     // so those mutations remain visible to the per-item write comparison.
+    if (items.some(i => i.sk === 'SHARED')) room.shared = items.find(i => i.sk === 'SHARED')!.data;
     this.originals.set(room, structuredClone(items)); return room;
   }
   async find(owner: string, key: string) { const record = await this.db.get(`ROOMKEY#${owner}#${key}`); return record ? this.get(record.roomId) : undefined; }

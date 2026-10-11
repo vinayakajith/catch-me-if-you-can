@@ -1,3 +1,4 @@
+import type { SharedState, SharedPlayerRecord } from '../../../packages/game-core/src/index.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,9 +10,11 @@ export interface RoomAttempt {
   receipts: { seq: number; result: ActionResult }[];
 }
 export interface RoomPlayer {
+  shared?: SharedPlayerRecord;
   id: string; owner: string; name: string; joinedAt: number; bestScore: number; attempt: RoomAttempt | null;
 }
 export interface RoomRecord {
+  shared?: SharedState;
   id: string; owner: string; key: string; revision: number; father: CharacterPack;
   creationFingerprint?: string;
   createdAt: number; expiresAt: number; resultsExpireAt: number; mix: PlacementMix;

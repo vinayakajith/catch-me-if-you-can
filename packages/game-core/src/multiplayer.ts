@@ -20,7 +20,7 @@ export function placementMix(targets: Target[]): PlacementMix {
 export function balancedTargets(seed: string, mix: PlacementMix, previous = ''): Target[] {
   const rng = random(seed), statue = HOUSE.slots.find(s => s.kind === 'statue')!;
   const pools = (['visible', 'search', 'peek'] as const).map(mode => ({
-    slots: HOUSE.slots.filter(s => s.mode === mode && s !== statue),
+    slots: HOUSE.slots.filter(s => s.mode === mode && s !== statue && !s.id.includes('-decor-')),
     count: mix[mode] - (mode === 'visible' ? 1 : 0),
   }));
   // Some dense mixes fill every eligible slot. They have no alternative
@@ -43,6 +43,7 @@ export type HuntCommand = { seq: number } & (
   { kind: 'search' | 'spot' | 'catch'; id: string; seenAt?: number } | { kind: 'hint' }
 );
 export interface GameRoomInfo {
+  mode?: 'shared';
   id: string; fatherName: string; createdAt: number; expiresAt: number; resultsExpireAt: number;
   status: 'open' | 'closed'; playerCount: number; capacity: number; targetCount: number;
 }

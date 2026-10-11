@@ -66,7 +66,15 @@ for (const room of rooms.filter(r => r.id !== 'hall')) {
       peek: { visibleMs: 2100, hiddenMs: 3200 + slots.length % 5 * 150 } };
     slots.push(slot); props.push(slot);
   }
-  for (const [kind, x, y, w, h] of decoration[roomId]) props.push({ id: `${roomId}-decor-${kind}`, roomId, kind, prop: { x: room.x + x - w / 2, y: room.y + y - h / 2, w, h } });
+  for (const [kind, x, y, w, h] of decoration[roomId]) {
+    const prop = { x: room.x + x - w / 2, y: room.y + y - h / 2, w, h };
+    const target = { x: prop.x + w / 2, y: prop.y + h * .4 };
+    const slot: HidingSlot = { id: `${roomId}-decor-${kind}`, roomId, kind, prop, name: kind === 'tv' ? 'television' : kind,
+      mode: 'peek', behavior: 'peek', anchor: { x: target.x, y: prop.y + h + 32 }, target,
+      hit: { x: target.x - 28, y: target.y - 28, w: 56, h: 56 }, pose: { angle: 0, width: 48, height: 58, crop: .72 },
+      reveal: 'rim', peek: { visibleMs: 2100, hiddenMs: 3400 } };
+    slots.push(slot); props.push(slot);
+  }
 }
 
 export const HOUSE: HouseDefinition = {

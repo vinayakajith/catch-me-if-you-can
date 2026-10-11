@@ -1,3 +1,4 @@
+import { PLAYER_COLOURS, sharedPlayer } from '../../../packages/game-core/src/index.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -51,7 +52,8 @@ export class Rooms {
   async create(owner: string, data: Record<string, unknown>, idem: string): Promise<RoomView> {
     const playerName = name(data.name), fatherName = name(data.fatherName, 32);
     if (data.sourceRoomId !== undefined && (typeof data.sourceRoomId !== 'string' || data.characterId !== undefined)) throw new JobError(400, 'Choose one character for the new game.');
-    const fingerprint = hash(JSON.stringify([playerName, fatherName, data.sourceRoomId ?? null, data.characterId ?? null]));
+    if (data.mode !== undefined && data.mode !== 'shared') throw new JobError(400, 'Unknown game mode.');
+    const fingerprint = hash(JSON.stringify([playerName, fatherName, data.sourceRoomId ?? null, data.characterId ?? null, ...(data.mode ? [data.mode] : [])]));
     const old = await this.store.find(owner, idem);
     if (old) { if (old.creationFingerprint && old.creationFingerprint !== fingerprint) throw new JobError(409, 'This creation request changed. Start a fresh game.'); return this.view(old.id, owner); }
     const id = randomUUID();
@@ -73,6 +75,10 @@ export class Rooms {
     const now = this.clock(); father.expiresAt = now + EXPIRY_MS;
     const room: RoomRecord = { id, owner, key: idem, creationFingerprint: fingerprint, revision: 1, father, createdAt: now, expiresAt: now + EXPIRY_MS, resultsExpireAt: now + EXPIRY_MS + RESULTS_MS,
       mix: placementMix(placeTargets(id)), players: [{ id: randomUUID(), owner, name: playerName, joinedAt: now, bestScore: 0, attempt: null }], events: [], cursor: 0, cleaned: false };
+    if (data.mode === 'shared') {
+      const host = room.players[0]; host.shared = sharedPlayer(host.id, host.name, 0, now);
+      room.shared = { hostId: host.id, phase: 'lobby', round: null, events: [], cursor: 0, lastScores: [] };
+    }
     try {
       if (!await this.store.insert(room)) { await this.assets.remove(id); return this.create(owner, data, idem); }
     } catch (error) { await this.assets.remove(id); throw error; }
@@ -85,7 +91,9 @@ export class Rooms {
       if (room.players.length >= MAX_PLAYERS) throw new JobError(409, 'All five player seats are taken.');
       const clean = name(playerName);
       if (room.players.some(p => p.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) throw new JobError(409, 'That name is taken. Add a nickname.');
-      room.players.push({ id: randomUUID(), owner, name: clean, joinedAt: this.clock(), bestScore: 0, attempt: null });
+      const player: RoomPlayer = { id: randomUUID(), owner, name: clean, joinedAt: this.clock(), bestScore: 0, attempt: null };
+      if (room.shared) player.shared = sharedPlayer(player.id, clean, PLAYER_COLOURS.findIndex(c => !room.players.some(p => p.shared?.colour === c)), this.clock());
+      room.players.push(player);
     });
     return this.view(id, owner);
   }
@@ -97,7 +105,7 @@ export class Rooms {
     }).sort((a, b) => b.bestScore - a.bestScore);
     standings.forEach(p => { p.rank = 1 + standings.filter(other => other.bestScore > p.bestScore).length; });
     const session = me && !closed ? this.session(me) : null; session?.tick();
-    return { room: { id, fatherName: room.father.name, createdAt: room.createdAt, expiresAt: room.expiresAt, resultsExpireAt: room.resultsExpireAt, status: closed ? 'closed' : 'open', playerCount: room.players.length, capacity: MAX_PLAYERS, targetCount: Object.values(room.mix).reduce((a, b) => a + b, 1) },
+    return { room: { ...(room.shared ? { mode: 'shared' as const } : {}), id, fatherName: room.father.name, createdAt: room.createdAt, expiresAt: room.expiresAt, resultsExpireAt: room.resultsExpireAt, status: closed ? 'closed' : 'open', playerCount: room.players.length, capacity: MAX_PLAYERS, targetCount: Object.values(room.mix).reduce((a, b) => a + b, 1) },
       me: me ? { id: me.id, name: me.name } : null, father: me && !closed ? room.father : null,
       reusableFather: me && room.father.atlas ? { ...room.father, expiresAt: room.resultsExpireAt } : null,
       standings: me || closed ? standings : [], events: me && !closed ? room.events.filter(e => e.id > after) : [], cursor: room.cursor, revision: room.revision, serverNow: now,
@@ -105,7 +113,7 @@ export class Rooms {
   }
   async start(id: string, owner: string, idem: string, controller: string): Promise<ControlledAttempt> {
     await this.change(id, room => {
-      this.open(room); const player = this.member(room, owner);
+      this.open(room); if (room.shared) throw new JobError(409, 'Wait for the host to start the shared hunt.'); const player = this.member(room, owner);
       if (player.attempt?.key === idem) {
         if (player.attempt.controller !== hash(controller)) throw new JobError(409, 'Resume the current attempt on this device.');
         return;

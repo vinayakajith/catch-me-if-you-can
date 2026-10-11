@@ -62,8 +62,8 @@ test('names and independent expression metadata stay personal across all five in
   assert.equal(createFatherProfile('   ').name, 'Balaji'); assert.equal(createFatherProfile('x'.repeat(100)).name.length, 32);
 });
 
-test('all twenty hideouts and every pair of return routes are reachable without clipping walls', () => {
-  assert.equal(HOUSE.slots.length, 20); const { session } = fixture();
+test('all twenty-nine hideouts and every pair of return routes are reachable without clipping walls', () => {
+  assert.equal(HOUSE.slots.length, 29); const { session } = fixture();
   for (const from of HOUSE.slots) for (const to of HOUSE.slots) {
     if (from === to) continue;
     assert.ok(isWalkable(from.anchor), from.id); walkTo(session, from.anchor); walkTo(session, to.anchor);
@@ -171,7 +171,7 @@ test('spotting cannot see other rooms or nonexistent targets, and a remembered t
 });
 
 test('a visible peek survives mobile delivery latency but old observations cannot reveal a hidden father', () => {
-  const slot = HOUSE.slots.find(s => s.mode === 'peek')!, f = fixture(seedWith(slot.id));
+  const slot = HOUSE.slots.find(s => s.mode === 'peek' && !s.id.includes('-decor-'))!, f = fixture(seedWith(slot.id));
   walkTo(f.session, slot.anchor);
   const state = f.session.getSnapshot(), target = targetAt(f.session, slot.id);
   let seen = -1;

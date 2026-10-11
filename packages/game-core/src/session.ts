@@ -14,7 +14,7 @@ export const SPOT_GRACE_MS = 1000;
 
 export function placeTargets(seed: string): Target[] {
   const rng = random(seed), count = 12 + Math.floor(rng() * 9);
-  const candidates = shuffled(HOUSE.slots, rng);
+  const candidates = shuffled(HOUSE.slots.filter(s => !s.id.includes('-decor-')), rng);
   // A spotlighted deadpan statue is the welcoming easy catch. Other disguises
   // shuffle, with at least one hidden target in every room and one broom rider.
   const chosen = [HOUSE.slots.find(s => s.kind === 'statue')!];
