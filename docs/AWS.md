@@ -1,6 +1,6 @@
 # Catch Me If You Can on AWS
 
-The serverless implementation is ready to build and test locally. This phase **does not deploy AWS resources, change DNS or spend a production image budget**. Deployment commands below are for the next authorized phase.
+The serverless implementation is ready to deploy after the AWS account and exact hostname are connected. Start with sample artwork: `ImageEnabled=false`, `ImageBudgetMicros=0`. AWS hosting and a production image allowance are separate decisions.
 
 ## Understand the pieces
 
@@ -51,6 +51,19 @@ npm run security:check
 
 `infra:synth` writes a reviewable CloudFormation template to `artifacts/cdk.out`, without deploying. Infrastructure tests check private buckets, isolated secrets, image generation disabled by default, TTL, throttles, queues and routes. DynamoDB tests reject non-loopback endpoints and use dummy credentials.
 
+## Connect the deployment account
+
+Use AWS CLI v2.32 or newer. Sign in through the browser with a named profile:
+
+```bash
+aws login --profile catch-me-if-you-can --region ap-south-1
+aws sts get-caller-identity --profile catch-me-if-you-can
+```
+
+Complete authentication in the AWS browser window. Keep credentials out of chat, project files and shell commands. Verify the returned account before creating resources. For an IAM user or role, AWS requires `SignInLocalDevelopmentAccess` for this login method; IAM Identity Center users should use `aws configure sso --profile catch-me-if-you-can` instead. See [AWS browser-based CLI sign-in](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html).
+
+Use the same profile for all account commands and CDK operations. If a login expires, sign in again; don't replace it with access keys in the repository.
+
 ## Domain and certificate
 
 Choose the exact hostname, such as `play.example.com`. DNS can stay at its current provider; moving the whole domain to Route 53 is unnecessary.
@@ -59,14 +72,15 @@ Request an ACM certificate covering the hostname in **us-east-1**, add ACM’s D
 
 The stack defaults to backend region `ap-south-1`. Set `CDK_DEFAULT_REGION` to choose another. No account or DNS lookup is needed for synthesis: `DomainName` and `CertificateArn` are deployment parameters.
 
-## Deployment — next phase
+## Deployment
 
-1. Sign into the intended account with an AWS CLI profile or SSO. Confirm it with `aws sts get-caller-identity`. Configure hosting billing alerts. The image allowance caps OpenAI generation, not AWS hosting charges.
-2. Build and review the template. Review `cdk diff` in that account. Bootstrap the account/region if this is its first CDK deployment; bootstrap itself creates resources.
+1. Connect the intended account as above and configure hosting billing alerts. The image allowance caps OpenAI generation, not AWS hosting charges.
+2. Build and review the template. Review `npx cdk diff CatchMeIfYouCan --profile catch-me-if-you-can --method template` in that account. Bootstrap the account/region if this is its first CDK deployment; bootstrap itself creates resources. Use `npx cdk bootstrap aws://ACCOUNT_ID/ap-south-1 --profile catch-me-if-you-can`, replacing `ACCOUNT_ID` with the verified account number.
 3. Deploy sample mode with the actual hostname and issued certificate ARN:
 
    ```bash
    npx cdk deploy CatchMeIfYouCan \
+     --profile catch-me-if-you-can \
      --parameters DomainName=play.example.com \
      --parameters CertificateArn=YOUR_ISSUED_US_EAST_1_CERTIFICATE_ARN \
      --parameters ImageEnabled=false \
