@@ -72,6 +72,20 @@ Request an ACM certificate covering the hostname in **us-east-1**, add ACM’s D
 
 The stack defaults to backend region `ap-south-1`. Set `CDK_DEFAULT_REGION` to choose another. No account or DNS lookup is needed for synthesis: `DomainName` and `CertificateArn` are deployment parameters.
 
+## Check the regional Lambda quota
+
+Before the first deployment, inspect the account's available concurrency:
+
+```bash
+aws lambda get-account-settings \
+  --profile catch-me-if-you-can --region ap-south-1 \
+  --query AccountLimit --output json --no-cli-pager
+```
+
+New accounts can start with only 10 concurrent executions. This stack reserves 23 (20 API, two image workers and one cleanup), and [Lambda requires another 100 to remain unreserved](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html). At least 123 unreserved executions must therefore be available before this stack's first deployment. Other applications' reservations also consume the account's quota.
+
+If the account limit is too low, request an increase for **AWS Lambda → Concurrent executions** in Service Quotas in the deployment region. A limit of 200 is sufficient for this stack in an otherwise unused account. Wait for the applied limit to increase before deploying; a submitted request alone does not change it. Raising the quota does not enable image generation or change the application's per-function caps.
+
 ## Deployment
 
 1. Connect the intended account as above and configure hosting billing alerts. The image allowance caps OpenAI generation, not AWS hosting charges.
