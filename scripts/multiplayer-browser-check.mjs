@@ -98,14 +98,16 @@ try {
     } else { if (catchCommand?.seq === lostSequence) repeatedCatch = true; await route.continue(); }
   });
   await Promise.all(pages.map(async page => {
-    const friendNotice = page.locator('.live-catch').waitFor({ timeout: 20000 }).then(async () => {
+    const friendNotice = page.locator('.live-catch').waitFor({ timeout: 30000 }).then(async () => {
       assert.equal(await page.locator('.coach').isVisible(), false, 'Friend notices do not overlap the guidance tip');
     });
     // Observe short-lived notices as peers catch, including while this player
     // is still walking on a slow device.
     friendNotice.catch(() => {});
     await page.evaluate(() => { const t = window.__huntTest; const target = t.session.getSnapshot().targets.find(t => t.kind === 'hidden' && t.slotId === 'living-statue'); void t.tap(t.face(target.id)); });
-    try { await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().player.score === 1, undefined, { timeout: 20000 }); }
+    // Include walking, the injected 429 backoff and the catch receipt. Five
+    // software-rendered views can reach the target just after 20 seconds.
+    try { await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().player.score === 1, undefined, { timeout: 30000 }); }
     catch (error) {
       console.error('Catch diagnostics', await page.evaluate(() => { const t = window.__huntTest, s = t.session.getSnapshot(); return { player: s.player, connection: s.connection, message: s.connectionMessage, status: s.status, pending: s.pendingActions, route: t.scene.route, action: t.scene.pending, acting: t.scene.acting, enabled: t.scene.bridge.inputEnabled, fps: t.scene.game.loop.actualFps, rawDelta: t.scene.game.loop.rawDelta }; }));
       throw error;
