@@ -394,22 +394,32 @@ export class HouseScene extends Phaser.Scene {
     const k = this.keys;
     const keyDirection = { x: Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.LEFT.isDown), y: Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.UP.isDown) };
     let direction = this.bridge.movement.x || this.bridge.movement.y ? this.bridge.movement : keyDirection;
-    if (direction.x || direction.y) { this.route = []; this.pending = undefined; }
-    else if (this.pending?.type === 'catch' && this.canPerform(this.pending)) { this.route = []; this.perform(); }
-    else if (this.route.length) {
+    const manual = Boolean(direction.x || direction.y);
+    if (manual) { this.route = []; this.pending = undefined; }
+    // Animation smoothing can turn a 200 ms frame into 16 ms, slowing walking
+    // while the server's round clock keeps running. Consume bounded real time
+    // in the same <=40 ms collision steps accepted by the server. Long tab
+    // suspensions never build a movement backlog.
+    const elapsed = this.game.loop.rawDelta ?? delta;
+    let remaining = !document.hidden && Number.isFinite(elapsed) && elapsed < 1000 ? Math.max(0, Math.min(250, elapsed)) : 0;
+    while (remaining > 0 && !this.capturing && !this.acting) {
+      let step = Math.min(40, remaining);
       const pos = this.bridge.session.getSnapshot().player.position;
-      while (this.route.length && distance(pos, this.route[0]) < .1) this.route.shift();
-      // A server correction can put us before a corner already passed by the
-      // predicted route. Plan around that corner again instead of hitting a wall.
-      if (this.route.length && !clearPath(pos, this.route[0])) this.route = findPath(pos, this.route.at(-1)!);
-      if (this.route.length) {
+      if (!manual) {
+        if (this.pending?.type === 'catch' && this.canPerform(this.pending)) { this.route = []; this.perform(); break; }
+        while (this.route.length && distance(pos, this.route[0]) < .1) this.route.shift();
+        // Replan if a server correction moved us back behind a corner.
+        if (this.route.length && !clearPath(pos, this.route[0])) this.route = findPath(pos, this.route.at(-1)!);
+        if (!this.route.length) { this.perform(); break; }
         const next = this.route[0], d = distance(pos, next);
         direction = { x: (next.x - pos.x) / d, y: (next.y - pos.y) / d };
-        delta = Math.min(delta, d / 210 * 1000);
-      } else this.perform();
+        step = Math.min(step, d / 210 * 1000);
+      }
+      this.bridge.session.move(direction, step);
+      remaining -= step;
+      if (distance(pos, this.bridge.session.getSnapshot().player.position) < .001) break;
     }
     if (this.capturing) return;
-    this.bridge.session.move(direction, delta);
     if (Phaser.Input.Keyboard.JustDown(k.E)) this.inspectNearest();
     const state = this.bridge.session.getSnapshot(), pos = state.player.position;
     const moving = distance(pos, this.previousPosition) > .1;

@@ -67,6 +67,13 @@ try {
     assert.match(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.atlas), /\/api\/rooms\/.*\/assets\/atlas.png$/, 'Every player loads the host’s personal character');
   }));
   console.log('PASS personal room creation survives lost reply; five browsers load the shared character; sixth rejected; timers start after intro');
+  // Reproduce a slow phone / shared CI renderer without slowing server time.
+  // Walking must not inherit Phaser's smoothed 60 Hz animation delta.
+  await pages[4].evaluate(() => {
+    const loop = window.__huntTest.scene.game.loop;
+    loop.sleep();
+    window.__slowFrames = setInterval(() => loop.step(performance.now()), 200);
+  });
   let lostCatch = false, repeatedCatch = false, lostSequence;
   let throttledMove = false;
   await pages[2].route('**/commands', async route => {
@@ -87,11 +94,12 @@ try {
     await page.evaluate(() => { const t = window.__huntTest; const target = t.session.getSnapshot().targets.find(t => t.kind === 'hidden' && t.slotId === 'living-statue'); void t.tap(t.face(target.id)); });
     try { await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().player.score === 1, undefined, { timeout: 20000 }); }
     catch (error) {
-      console.error('Catch diagnostics', await page.evaluate(() => { const t = window.__huntTest, s = t.session.getSnapshot(); return { player: s.player, connection: s.connection, message: s.connectionMessage, status: s.status, pending: s.pendingActions, route: t.scene.route, action: t.scene.pending, acting: t.scene.acting, enabled: t.scene.bridge.inputEnabled }; }));
+      console.error('Catch diagnostics', await page.evaluate(() => { const t = window.__huntTest, s = t.session.getSnapshot(); return { player: s.player, connection: s.connection, message: s.connectionMessage, status: s.status, pending: s.pendingActions, route: t.scene.route, action: t.scene.pending, acting: t.scene.acting, enabled: t.scene.bridge.inputEnabled, fps: t.scene.game.loop.actualFps, rawDelta: t.scene.game.loop.rawDelta }; }));
       throw error;
     }
     await page.waitForFunction(() => window.__huntTest?.presentation().bagged === 1);
   }));
+  await pages[4].evaluate(() => { clearInterval(window.__slowFrames); window.__huntTest.scene.game.loop.wake(); });
   assert.ok(lostCatch && repeatedCatch, 'Confirmed catch with a lost reply was retried');
   assert.ok(throttledMove, 'A rate-limited movement batch resumes the original walk without another tap');
   const confirmed = await (await host.request.get(`${base}${path.replace('/r/', '/api/rooms/')}/state`)).json();
