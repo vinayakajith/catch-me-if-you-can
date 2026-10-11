@@ -2,7 +2,7 @@ import { chromium, devices } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { HOUSE, placeTargets, peekProgress } from '../packages/game-core/src/index.ts';
+import { HOUSE, placeTargets, peekProgress, distance } from '../packages/game-core/src/index.ts';
 
 const fixtureSeed = Array.from({ length: 1000 }, (_, i) => `browser-${i}`).find(seed => placeTargets(seed).length === 12 && placeTargets(seed).some(t => t.kind === 'hidden' && t.slotId === 'bathroom-toilet'));
 const baseURL = process.env.FATHER_HUNTER_URL || 'http://127.0.0.1:5173';
@@ -280,6 +280,30 @@ try {
   const page = await desktop.newPage();
   await page.goto(baseURL); await page.screenshot({ path: new URL('desktop-home.png', artifacts).pathname, fullPage: true });
   await start(page, 'Alan', fixtureSeed, { reviewIntro: true, fatherName: 'Suresh' });
+  const visibilityMovement = await page.evaluate(() => {
+    const { scene, session } = window.__huntTest, loop = scene.game.loop;
+    const hiddenProperty = Object.getOwnPropertyDescriptor(document, 'hidden'), rawDelta = loop.rawDelta;
+    const before = session.getSnapshot().player.position;
+    const frame = hidden => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+      scene.bridge.movement = { x: 0, y: -1 }; loop.rawDelta = 5000;
+      scene.update(performance.now(), 16);
+      return session.getSnapshot().player.position;
+    };
+    try {
+      const background = frame(true), resumed = frame(false);
+      loop.rawDelta = 1200; scene.update(performance.now(), 16);
+      return { before, background, resumed, next: session.getSnapshot().player.position };
+    } finally {
+      scene.bridge.movement = { x: 0, y: 0 }; loop.rawDelta = rawDelta;
+      if (hiddenProperty) Object.defineProperty(document, 'hidden', hiddenProperty); else delete document.hidden;
+    }
+  });
+  assert.deepEqual(visibilityMovement.background, visibilityMovement.before, 'Hidden tabs cannot walk');
+  assert.deepEqual(visibilityMovement.resumed, visibilityMovement.before, 'Returning to a tab discards paused movement');
+  const resumedDistance = distance(visibilityMovement.resumed, visibilityMovement.next);
+  assert.ok(resumedDistance > 0 && resumedDistance <= 52.501, 'Slow visible frames resume bounded movement');
   await page.screenshot({ path: new URL('desktop-house.png', artifacts).pathname });
   await catchBroom(page, false);
   await commode(page, false);

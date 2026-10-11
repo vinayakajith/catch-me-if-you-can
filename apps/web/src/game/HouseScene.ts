@@ -41,6 +41,7 @@ export class HouseScene extends Phaser.Scene {
   private acting = false;
   private layoutId = '';
   private loaded = true;
+  private skipMovementFrame = false;
   private sack!: Phaser.GameObjects.Image;
   private captureFX!: Phaser.GameObjects.Graphics;
   private bagCount = 0;
@@ -106,8 +107,11 @@ export class HouseScene extends Phaser.Scene {
     this.bridge.inspect = () => this.inspectNearest();
     this.bridge.navigate = point => this.walkTo(point);
     const unsubscribe = this.bridge.session.subscribe(() => this.sync());
+    const visibility = () => { this.skipMovementFrame = true; };
+    document.addEventListener('visibilitychange', visibility);
     this.events.once('shutdown', () => {
       unsubscribe(); this.scale.off('resize', this.resize, this);
+      document.removeEventListener('visibilitychange', visibility);
       this.bridge.inspect = undefined; this.bridge.navigate = undefined;
       if (import.meta.env.DEV) delete (window as unknown as { __huntTest?: unknown }).__huntTest;
     });
@@ -398,10 +402,12 @@ export class HouseScene extends Phaser.Scene {
     if (manual) { this.route = []; this.pending = undefined; }
     // Animation smoothing can turn a 200 ms frame into 16 ms, slowing walking
     // while the server's round clock keeps running. Consume bounded real time
-    // in the same <=40 ms collision steps accepted by the server. Long tab
-    // suspensions never build a movement backlog.
+    // in the same <=40 ms collision steps accepted by the server. A slow visible
+    // frame is not a tab suspension; visibility changes discard the resume frame
+    // and the cap prevents a movement backlog after any long pause.
     const elapsed = this.game.loop.rawDelta ?? delta;
-    let remaining = !document.hidden && Number.isFinite(elapsed) && elapsed < 1000 ? Math.max(0, Math.min(250, elapsed)) : 0;
+    let remaining = !document.hidden && !this.skipMovementFrame && Number.isFinite(elapsed) ? Math.max(0, Math.min(250, elapsed)) : 0;
+    this.skipMovementFrame = false;
     while (remaining > 0 && !this.capturing && !this.acting) {
       let step = Math.min(40, remaining);
       const pos = this.bridge.session.getSnapshot().player.position;

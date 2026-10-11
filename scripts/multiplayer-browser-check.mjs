@@ -73,13 +73,14 @@ try {
     assert.match(await page.evaluate(() => window.__huntTest.session.getSnapshot().father.atlas), /\/api\/rooms\/.*\/assets\/atlas.png$/, 'Every player loads the host’s personal character');
   }));
   console.log('PASS personal room creation survives lost reply; five browsers load the shared character; sixth rejected; timers start after intro');
-  // Reproduce a slow phone / shared CI renderer without slowing server time.
-  // Walking must not inherit Phaser's smoothed 60 Hz animation delta.
-  await pages[4].evaluate(() => {
+  // Reproduce slow phones without slowing server time, including frames longer
+  // than one second. Visible players must keep walking at bounded speed.
+  const slowPlayers = [[3, 200], [4, 1200]];
+  await Promise.all(slowPlayers.map(([index, interval]) => pages[index].evaluate(ms => {
     const loop = window.__huntTest.scene.game.loop;
     loop.sleep();
-    window.__slowFrames = setInterval(() => loop.step(performance.now()), 200);
-  });
+    window.__slowFrames = setInterval(() => loop.step(performance.now()), ms);
+  }, interval)));
   let lostCatch = false, repeatedCatch = false, lostSequence;
   let throttledMove = false;
   await pages[2].route('**/commands', async route => {
@@ -97,6 +98,12 @@ try {
     } else { if (catchCommand?.seq === lostSequence) repeatedCatch = true; await route.continue(); }
   });
   await Promise.all(pages.map(async page => {
+    const friendNotice = page.locator('.live-catch').waitFor({ timeout: 20000 }).then(async () => {
+      assert.equal(await page.locator('.coach').isVisible(), false, 'Friend notices do not overlap the guidance tip');
+    });
+    // Observe short-lived notices as peers catch, including while this player
+    // is still walking on a slow device.
+    friendNotice.catch(() => {});
     await page.evaluate(() => { const t = window.__huntTest; const target = t.session.getSnapshot().targets.find(t => t.kind === 'hidden' && t.slotId === 'living-statue'); void t.tap(t.face(target.id)); });
     try { await page.waitForFunction(() => window.__huntTest?.session.getSnapshot().player.score === 1, undefined, { timeout: 20000 }); }
     catch (error) {
@@ -104,17 +111,14 @@ try {
       throw error;
     }
     await page.waitForFunction(() => window.__huntTest?.presentation().bagged === 1);
+    await friendNotice;
   }));
-  await pages[4].evaluate(() => { clearInterval(window.__slowFrames); window.__huntTest.scene.game.loop.wake(); });
+  await Promise.all(slowPlayers.map(([index]) => pages[index].evaluate(() => { clearInterval(window.__slowFrames); window.__huntTest.scene.game.loop.wake(); })));
   assert.ok(lostCatch && repeatedCatch, 'Confirmed catch with a lost reply was retried');
   assert.ok(throttledMove, 'A rate-limited movement batch resumes the original walk without another tap');
   const confirmed = await (await host.request.get(`${base}${path.replace('/r/', '/api/rooms/')}/state`)).json();
   assert.equal(confirmed.cursor, 5, 'Retries create no duplicate catch events or points');
   await host.waitForFunction(() => [...document.querySelectorAll('.case-file .standing-score')].length === 5 && [...document.querySelectorAll('.case-file .standing-score')].every(el => el.textContent === '1'));
-  await Promise.all(pages.map(async page => {
-    await page.locator('.live-catch').waitFor({ timeout: 8000 });
-    assert.equal(await page.locator('.coach').isVisible(), false, 'Friend notices do not overlap the guidance tip');
-  }));
   for (const i of [1, 3]) assert.equal(await pages[i].getByRole('region', { name: 'Leaderboard', exact: true }).isVisible(), false, 'Mobile board hidden during hunt');
   await host.screenshot({ path: join(artifacts, 'multiplayer-desktop.png') });
   await pages[1].screenshot({ path: join(artifacts, 'multiplayer-mobile.png') });
