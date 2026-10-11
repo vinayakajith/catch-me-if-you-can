@@ -21,6 +21,7 @@
     "test:aws": "node scripts/aws-test.mjs",
     "test:load:aws": "node scripts/aws-test.mjs --load",
     "test:shared": "node scripts/shared-browser-check.mjs",
+    "test:production": "node scripts/production-browser-check.mjs",
     "test:load:shared": "node scripts/aws-test.mjs --shared-load",
     "build:aws": "npm run build && node scripts/build-aws.mjs",
     "test:infra": "tsc --noEmit -p infra/tsconfig.json && node --test infra/test/*.test.ts",

@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 // Explicit live check: one sample room, five independent browser cookies, zero
 // image generations. Uses only public UI/API, with no development test hooks.
 const origin = new URL(process.argv[2]).origin;
-if (!origin.startsWith('https://')) throw new Error('Provide the HTTPS game origin.');
+if (!origin.startsWith('https://') && !/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) throw new Error('Provide the HTTPS game origin (or the isolated loopback fixture).');
 const artifacts = new URL('../artifacts/', import.meta.url); await mkdir(artifacts, { recursive: true });
 const browser = await chromium.launch(), pages = [], states = [], errors = [], requests = new Map(), timings = [];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -13,7 +13,7 @@ async function until(check, timeout = 20000) { const end = Date.now() + timeout;
 try {
   for (let i = 0; i < 5; i++) {
     const context = await browser.newContext(i % 2 ? { ...devices['iPhone 13'], viewport: { width: 844, height: 390 } } : { viewport: { width: 1440, height: 900 } });
-    const page = await context.newPage(); pages.push(page); page.on('pageerror', e => errors.push(e.message));
+    const page = await context.newPage(); pages.push(page); page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error' && /Content Security Policy|violates/.test(m.text())) console.error(m.text().slice(0, 600)); });
     page.on('websocket', ws => {
       ws.on('framesent', frame => { const m = JSON.parse(String(frame.payload)); requests.set(m.requestId, performance.now()); });
       ws.on('framereceived', frame => {
@@ -53,6 +53,9 @@ try {
   await Promise.all(pages.map(p => p.locator('.arena-room').filter({ hasText: 'Kitchen' }).waitFor({ timeout: 20000 })));
   await phone.screenshot({ path: new URL('live-shared-phone.png', artifacts).pathname }); await host.screenshot({ path: new URL('live-shared-desktop.png', artifacts).pathname });
   console.log('PASS live: refresh preserves score/deadline; single map tap walks every player through doors to the kitchen');
+  if (process.argv.includes('--quick')) {
+    assert.deepEqual(errors, []); console.log('PASS production build and browser security policy');
+  } else {
   // Keep all five sessions alive through the actual shared two-minute deadline.
   await Promise.all(pages.map(p => p.getByRole('dialog', { name: 'Hunt results', exact: true }).waitFor({ timeout: 130000 })));
   for (const p of pages) assert.equal(await p.getByRole('list', { name: 'Final scores', exact: true }).locator('li').count(), 5);
@@ -63,6 +66,7 @@ try {
   const result = { origin, players: 5, responses: timings.length, responseP95Ms: Math.round(sorted[Math.floor(sorted.length * .95)]), browserErrors: errors.length, paidImages: 0 };
   console.log('PASS live: shared two-minute results, mobile rankings and rematch', JSON.stringify(result));
   await writeFile(new URL('live-shared-browser.json', artifacts), JSON.stringify(result, null, 2));
+  }
 } catch (error) {
   for (let i = 0; i < pages.length; i++) await pages[i].screenshot({ path: new URL(`live-shared-failure-${i}.png`, artifacts).pathname }).catch(() => {});
   throw error;

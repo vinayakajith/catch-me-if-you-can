@@ -31,6 +31,7 @@ jobs:
       - run: npm run test:characters
       - run: npm run test:multiplayer
       - run: npm run test:shared
+      - run: npm run test:production
       - run: npm run test:load:shared
       - run: npm run test:browser
       # CI uses fixture providers, temporary local storage and Docker only.

@@ -65,7 +65,13 @@ export class HouseScene extends Phaser.Scene {
 
   preload() {
     const density = this.bridge.pixelRatio ?? 1;
-    this.load.image('father-source', this.bridge.session.getSnapshot().father.atlas);
+    const atlas = this.bridge.session.getSnapshot().father.atlas;
+    // Ready-up already fetched this image. Decode its object URL as an image;
+    // Phaser's default XHR path is blocked by the production connect-src CSP.
+    const imageLoadType = this.load.imageLoadType;
+    if (atlas.startsWith('blob:')) this.load.imageLoadType = 'HTMLImageElement';
+    this.load.image('father-source', atlas);
+    this.load.imageLoadType = imageLoadType;
     for (let frame = 0; frame < 6; frame++) this.load.svg(`witch-${frame}`, svgUri(witchSvg(frame)), { width: 160 * density, height: 220 * density });
     this.load.svg('hammer-head', svgUri(hammerHeadSvg), { width: 240, height: 128 });
     for (const pose of DAD_POSES) this.load.svg(`body-${pose}`, svgUri(bodySvg(pose, this.bridge.session.getSnapshot().father.palette?.skin)), { width: 160 * density, height: 220 * density });
