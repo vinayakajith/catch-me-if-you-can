@@ -98,8 +98,14 @@ try {
     } else { if (catchCommand?.seq === lostSequence) repeatedCatch = true; await route.continue(); }
   });
   await Promise.all(pages.map(async page => {
-    const friendNotice = page.locator('.live-catch').waitFor({ timeout: 30000 }).then(async () => {
-      assert.equal(await page.locator('.coach').isVisible(), false, 'Friend notices do not overlap the guidance tip');
+    // Observe both elements in the same browser task. A slow runner can let
+    // the notice expire between separate locator calls and restore the coach.
+    const friendNotice = page.waitForFunction(() => {
+      if (!document.querySelector('.live-catch')?.getClientRects().length) return false;
+      return { coachVisible: !!document.querySelector('.coach')?.getClientRects().length };
+    }, undefined, { timeout: 30000 }).then(async observation => {
+      assert.equal((await observation.jsonValue()).coachVisible, false, 'Friend notices do not overlap the guidance tip');
+      await observation.dispose();
     });
     // Observe short-lived notices as peers catch, including while this player
     // is still walking on a slow device.
