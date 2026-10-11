@@ -6,6 +6,7 @@ import { JobError } from '../jobs.ts';
 import { runtime, required } from './runtime.ts';
 import type { CloudJobs } from './jobs.ts';
 import type { FastifyInstance } from 'fastify';
+import { DynamoSocketStore } from './socket-store.ts';
 
 export function registerUploads(app: FastifyInstance, jobs: CloudJobs) {
   const owner = (cookie?: string) => createHash('sha256').update(cookie ?? '').digest('hex');
@@ -32,7 +33,7 @@ let prepared: Promise<Proxy> | undefined;
 async function prepare() {
   const state = runtime();
   const provider = { available: false, testMode: false, model: 'server-managed', async generate(): Promise<never> { throw new Error('Image calls belong to the worker.'); } };
-  const { app } = await buildApp({ directory: '/tmp/father-hunter', provider, jobs: state.jobs, assets: state.assets, roomStore: state.rooms, limiter: state.limiter, background: false, publicOrigin: required('FATHER_HUNTER_PUBLIC_ORIGIN') });
+  const { app } = await buildApp({ directory: '/tmp/father-hunter', provider, jobs: state.jobs, assets: state.assets, roomStore: state.rooms, limiter: state.limiter, background: false, publicOrigin: required('FATHER_HUNTER_PUBLIC_ORIGIN'), socketStore: new DynamoSocketStore(state.db), socketEndpoint: required('FH_SOCKET_ENDPOINT') });
   registerUploads(app, state.jobs);
   const proxy = awsLambdaFastify(app, { serializeLambdaArguments: false, decorateRequest: false }); await app.ready(); return proxy;
 }

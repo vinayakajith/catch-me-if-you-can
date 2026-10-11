@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { JobError } from './jobs.ts';
+import { JobError } from './errors.ts';
 
 export interface RateLimiter { take(key: string, limit: number, windowMs: number, now: number): Promise<boolean> | boolean }
 export class MemoryRateLimiter implements RateLimiter {

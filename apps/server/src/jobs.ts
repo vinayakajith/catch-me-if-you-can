@@ -5,7 +5,8 @@ import { assembleAtlas, normalizeHead, normalizePhoto } from './images.ts';
 
 const MAX_ATTEMPTS = 8;
 const generationOrder: Expression[] = ['grin', 'serious', 'laugh', 'giggle', 'bonked', 'dizzy'];
-export class JobError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
+export { JobError } from './errors.ts';
+import { JobError } from './errors.ts';
 export class CharacterJobs {
   private store: JobStore; private assets: AssetStore; readonly provider: ImageProvider;
   private clock: () => number; private dailyJobs: number; private retryDelayMs: number;

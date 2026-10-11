@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..'), output = resolve(root, 'artifacts/aws');
 await mkdir(`${output}/functions`, { recursive: true });
-await build({ entryPoints: { api: `${root}/apps/server/src/aws/api.ts`, workers: `${root}/apps/server/src/aws/workers.ts` }, outdir: `${output}/functions`, bundle: true, platform: 'node', target: 'node24', format: 'cjs', outExtension: { '.js': '.cjs' }, external: ['sharp'], sourcemap: false, minify: false });
+await build({ entryPoints: { api: `${root}/apps/server/src/aws/api.ts`, workers: `${root}/apps/server/src/aws/workers.ts`, realtime: `${root}/apps/server/src/aws/realtime.ts` }, outdir: `${output}/functions`, bundle: true, platform: 'node', target: 'node24', format: 'cjs', outExtension: { '.js': '.cjs' }, external: ['sharp'], sourcemap: false, minify: false });
 const { dependencies } = JSON.parse(await readFile(`${root}/apps/server/package.json`, 'utf8'));
 const layer = `${output}/layer/nodejs`, manifest = JSON.stringify({ name: 'catch-me-if-you-can-image-layer', private: true, version: '1.0.0', dependencies: { sharp: dependencies.sharp } }, null, 2);
 const binary = `${layer}/node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-${dependencies.sharp}.node`;

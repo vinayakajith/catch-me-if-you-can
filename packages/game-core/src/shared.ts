@@ -12,6 +12,7 @@ export interface SharedPlayer {
   id: string; name: string; colour: string; ready: boolean; connected: boolean; lastSeen: number;
   position: Point; roomId: HuntSnapshot['player']['roomId']; score: number; roundId: string | null;
   ack: number; revision: number; avatar?: string;
+  search?: HuntSnapshot['search'];
 }
 export interface SharedPlayerRecord extends SharedPlayer {
   connectionId?: string; controller?: string; credit: number; creditAt: number;

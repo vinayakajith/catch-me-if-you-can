@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { COUNTDOWN_MS, HOUSE, MAX_PLAYERS, MOVEMENT_BUFFER_MS, ROUND_MS, createSharedRound, sharedSession, targetSignature,
   type SharedPlayer, type SharedPlayerRecord, type SharedRequest, type SharedView, type ActionResult } from '../../../packages/game-core/src/index.ts';
 import type { RoomRecord, RoomStore } from './room-store.ts';
-import { JobError } from './jobs.ts';
+import { JobError } from './errors.ts';
 
 export function publicPlayer(p: SharedPlayerRecord, now: number, closed = false): SharedPlayer {
   return { id: p.id, name: p.name, colour: p.colour, ready: p.ready, connected: p.connected && now - p.lastSeen < 10000,
     lastSeen: p.lastSeen, position: p.position, roomId: p.roomId, score: p.score, roundId: p.roundId,
-    ack: p.ack, revision: p.revision, ...(p.avatar && !closed ? { avatar: p.avatar } : {}) };
+    ack: p.ack, revision: p.revision, search: p.search, ...(p.avatar && !closed ? { avatar: p.avatar } : {}) };
 }
 export class SharedRooms {
   readonly store: RoomStore;

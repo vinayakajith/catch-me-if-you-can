@@ -49,6 +49,20 @@ export class GameStack extends Stack {
     const worker = fn('ImageWorker', 'workers.imageHandler', 300, 2048, { FH_OPENAI_SECRET_ARN: key.secretArn });
     const dispatcher = fn('Dispatcher', 'workers.dispatchHandler', 30, 256);
     const cleanup = fn('Cleanup', 'workers.cleanupHandler', 120, 1024);
+    const realtime = new lambda.Function(this, 'Realtime', { runtime: lambda.Runtime.NODEJS_24_X, architecture: lambda.Architecture.X86_64,
+      code: lambda.Code.fromAsset(`${artifacts}/functions`), handler: 'realtime.handler', timeout: Duration.seconds(10), memorySize: 512,
+      environment: { FH_TABLE: table.tableName, FATHER_HUNTER_PUBLIC_ORIGIN: publicOrigin },
+      logGroup: new logs.LogGroup(this, 'RealtimeLogs', { retention: logs.RetentionDays.ONE_WEEK, removalPolicy: RemovalPolicy.DESTROY }) });
+    realtime.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:GetItem', 'dynamodb:Query', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem', 'dynamodb:ConditionCheckItem'], resources: [table.tableArn], conditions: { 'ForAllValues:StringLike': { 'dynamodb:LeadingKeys': ['ROOM#*', 'TICKET#*', 'SOCKET#*', 'SOCKETS#*', 'LIMIT#*'] } } }));
+    const sockets = new gateway.WebSocketApi(this, 'Sockets', { apiName: 'Catch Me If You Can Live',
+      connectRouteOptions: { integration: new integrations.WebSocketLambdaIntegration('Connect', realtime) },
+      disconnectRouteOptions: { integration: new integrations.WebSocketLambdaIntegration('Disconnect', realtime) },
+      defaultRouteOptions: { integration: new integrations.WebSocketLambdaIntegration('Message', realtime) } });
+    const socketStage = new gateway.WebSocketStage(this, 'SocketStage', { webSocketApi: sockets, stageName: 'live', autoDeploy: true });
+    const rawSocketStage = socketStage.node.defaultChild as gateway.CfnStage;
+    rawSocketStage.defaultRouteSettings = { throttlingRateLimit: 100, throttlingBurstLimit: 50, dataTraceEnabled: false, loggingLevel: 'OFF' };
+    sockets.grantManageConnections(realtime);
+    api.addEnvironment('FH_SOCKET_ENDPOINT', socketStage.url);
     // Omit reservations in shared mode: new accounts may have only 10 slots,
     // while any positive reservation requires 100 additional unreserved slots.
     (worker.node.defaultChild as lambda.CfnFunction).reservedConcurrentExecutions = capacity(2, Aws.NO_VALUE);
@@ -72,7 +86,7 @@ export class GameStack extends Stack {
     const requestPolicy = new cloudfront.OriginRequestPolicy(this, 'GameRequests', { cookieBehavior: cloudfront.OriginRequestCookieBehavior.allowList('fh-owner'), queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(), headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList('Origin', 'Content-Type', 'Idempotency-Key', 'X-FH-Request', 'CloudFront-Viewer-Address') });
     const security = new cloudfront.ResponseHeadersPolicy(this, 'BrowserSecurity', { securityHeadersBehavior: {
       contentTypeOptions: { override: true }, frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true }, referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true }, strictTransportSecurity: { accessControlMaxAge: Duration.days(365), override: true },
-      contentSecurityPolicy: { override: true, contentSecurityPolicy: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://${assets.bucketRegionalDomainName}; connect-src 'self' https://${assets.bucketRegionalDomainName}; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` },
+      contentSecurityPolicy: { override: true, contentSecurityPolicy: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://${assets.bucketRegionalDomainName}; connect-src 'self' https://${assets.bucketRegionalDomainName} ${socketStage.url}; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` },
     } });
     const router = new cloudfront.Function(this, 'Routes', { runtime: cloudfront.FunctionRuntime.JS_2_0, code: cloudfront.FunctionCode.fromInline(readFileSync(new URL('./routes.js', import.meta.url), 'utf8')) });
     const distribution = new cloudfront.Distribution(this, 'WebsiteCdn', { comment: 'Catch Me If You Can', domainNames: [domain.valueAsString], certificate: acm.Certificate.fromCertificateArn(this, 'Certificate', certificateArn.valueAsString), minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021, defaultRootObject: 'index.html',
@@ -91,6 +105,8 @@ export class GameStack extends Stack {
     const httpThrottles = new logs.MetricFilter(this, 'HttpThrottleMetric', { logGroup: accessLogs, metricNamespace: 'CatchMeIfYouCan', metricName: `${this.stackName}-HttpThrottles`, metricValue: '1', filterPattern: logs.FilterPattern.stringValue('$.status', '=', '429') });
     const alarms = [
       new watch.Alarm(this, 'ApiErrors', { metric: stage.metricServerError({ period: Duration.minutes(1) }), threshold: 5, evaluationPeriods: 2 }),
+      new watch.Alarm(this, 'RealtimeThrottles', { metric: realtime.metricThrottles({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
+      new watch.Alarm(this, 'RealtimeErrors', { metric: realtime.metricErrors({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'ApiThrottles', { metric: api.metricThrottles({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'HttpThrottles', { metric: httpThrottles.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 2 }),
       new watch.Alarm(this, 'ImageFailures', { metric: imageFailures.metric({ statistic: 'Sum', period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 1 }),
@@ -103,6 +119,7 @@ export class GameStack extends Stack {
     const dashboard = new watch.Dashboard(this, 'Operations');
     dashboard.addWidgets(new watch.AlarmStatusWidget({ title: 'Catch Me If You Can', alarms }), new watch.GraphWidget({ title: 'API requests and latency', left: [api.metricInvocations()], right: [api.metricDuration({ statistic: 'p95' })] }), new watch.GraphWidget({ title: 'Image queue', left: [queue.metricApproximateNumberOfMessagesVisible(), dead.metricApproximateNumberOfMessagesVisible()] }));
     new CfnOutput(this, 'GameUrl', { value: publicOrigin }); new CfnOutput(this, 'CloudFrontDomain', { value: distribution.distributionDomainName }); new CfnOutput(this, 'CloudFrontId', { value: distribution.distributionId });
+    new CfnOutput(this, 'RealtimeUrl', { value: socketStage.url });
     new CfnOutput(this, 'StateTable', { value: table.tableName }); new CfnOutput(this, 'WebsiteBucket', { value: web.bucketName }); new CfnOutput(this, 'PrivateImageBucket', { value: assets.bucketName });
     new CfnOutput(this, 'OpenAISecretArn', { value: key.secretArn }); new CfnOutput(this, 'DashboardName', { value: dashboard.dashboardName });
   }

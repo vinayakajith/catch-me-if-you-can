@@ -10,6 +10,8 @@ import { DiskAssetStore, SqliteJobStore } from './storage.ts';
 import { SqliteRoomStore, type RoomStore } from './room-store.ts';
 import { Rooms, registerRooms } from './rooms.ts';
 import { registerSecurity, publicOrigin, type RateLimiter } from './security.ts';
+import { SharedRooms } from './shared-rooms.ts';
+import { MemorySocketStore, Realtime, attachLocalSockets, registerShared, type SocketStore } from './realtime.ts';
 
 function owner(token?: string) { return createHash('sha256').update(token ?? '').digest('hex'); }
 function validName(value: unknown) {
@@ -20,7 +22,7 @@ function validName(value: unknown) {
 }
 function bodyObject(value: unknown): Record<string, unknown> { return value && typeof value === 'object' ? value as Record<string, unknown> : {}; }
 
-export async function buildApp<T extends CharacterService = CharacterJobs>(options: { directory: string; provider: ImageProvider; dailyJobs?: number; clock?: () => number; retryDelayMs?: number; publicOrigin?: string; limiter?: RateLimiter; jobs?: T; assets?: AssetStore; roomStore?: RoomStore; background?: boolean }) {
+export async function buildApp<T extends CharacterService = CharacterJobs>(options: { directory: string; provider: ImageProvider; dailyJobs?: number; clock?: () => number; retryDelayMs?: number; publicOrigin?: string; limiter?: RateLimiter; jobs?: T; assets?: AssetStore; roomStore?: RoomStore; background?: boolean; socketStore?: SocketStore; socketEndpoint?: string }) {
   const app = Fastify({ logger: false, bodyLimit: MAX_UPLOAD_BYTES + 16384 });
   await app.register(cookie);
   const canonicalOrigin = publicOrigin(options.publicOrigin);
@@ -29,7 +31,10 @@ export async function buildApp<T extends CharacterService = CharacterJobs>(optio
   const assets = options.assets ?? new DiskAssetStore(options.directory);
   const jobs = (options.jobs ?? new CharacterJobs({ ...options, store: new SqliteJobStore(options.directory), assets })) as T;
   await jobs.initialize();
-  const rooms = new Rooms(options.roomStore ?? new SqliteRoomStore(options.directory), assets, jobs, options.clock);
+  const roomStore = options.roomStore ?? new SqliteRoomStore(options.directory);
+  const rooms = new Rooms(roomStore, assets, jobs, options.clock), shared = new SharedRooms(roomStore, options.clock);
+  const socketStore = options.socketStore ?? new MemorySocketStore();
+  const realtime = options.socketEndpoint ? new Realtime(shared, socketStore, async () => {}) : attachLocalSockets(app, shared, socketStore, options.limiter);
   if (options.background !== false) await rooms.cleanup();
   let cleanupWork: Promise<unknown> = Promise.resolve();
   const cleanup = options.background === false ? undefined : setInterval(() => { cleanupWork = cleanupWork.then(() => Promise.all([jobs.cleanup(), rooms.cleanup()])).catch(() => console.error('Asset cleanup will retry.')); }, 60_000); cleanup?.unref();
@@ -79,6 +84,7 @@ export async function buildApp<T extends CharacterService = CharacterJobs>(optio
     return reply.type(request.params.name.endsWith('.jpg') ? 'image/jpeg' : 'image/png').send(bytes);
   });
   registerRooms(app, rooms, canonicalOrigin);
+  registerShared(app, realtime, options.socketEndpoint);
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof JobError) return reply.code(error.status).send({ message: error.message });
     if (error instanceof GenerationError) return reply.code(400).send({ message: error.message });
@@ -89,5 +95,5 @@ export async function buildApp<T extends CharacterService = CharacterJobs>(optio
     return reply.code(500).send({ message: request.url.startsWith('/api/rooms') ? 'The room could not update. Reconnect to continue.' : 'Dad’s paperwork got stuck. Your completed faces are saved; try again.' });
   });
   app.addHook('onClose', async () => { clearInterval(cleanup); await cleanupWork; await rooms.close(); await jobs.close(); });
-  return { app, jobs, rooms };
+  return { app, jobs, rooms, shared, realtime };
 }
