@@ -44,11 +44,15 @@ try {
   assert.equal(new Set(states.map(s => s.round.id)).size, 1); assert.equal(states[0].round.targets.length, 20);
   assert.equal(await phone.locator('.arena-board').isVisible(), false); assert.equal(await host.locator('.arena-board').isVisible(), true);
   await Promise.all(pages.map(p => p.locator('.arena-action').click()));
-  await until(() => states.every(s => s.players.reduce((n, p) => n + p.score, 0) === 1));
-  console.log('PASS live: host-started 5-player room, sixth rejected, unique colours, one shared catch from five simultaneous button presses');
+  // The roaming broom can pass one player while others approach the statue.
+  // Each independently claimed father must credit exactly one matching player.
+  await until(() => states.every(s => s.players.reduce((n, p) => n + p.score, 0) >= 1));
+  for (const s of states) for (const p of s.players) assert.equal(p.score, s.round.targets.filter(t => t.claimedBy === p.id).length);
+  console.log('PASS live: host-started 5-player room, sixth rejected, unique colours, concurrent catches award exactly one point per father');
   const deadline = states[0].round.endsAt;
+  const claimed = states[1].round.targets.filter(t => t.claimedBy).map(t => ({ id: t.id, by: t.claimedBy }));
   await phone.reload(); await phone.locator('.arena-action').waitFor();
-  await until(() => states[1].round?.endsAt === deadline && states[1].players.reduce((n, p) => n + p.score, 0) === 1);
+  await until(() => states[1].round?.endsAt === deadline && claimed.every(t => states[1].round.targets.some(next => next.id === t.id && next.claimedBy === t.by)));
   await Promise.all(pages.map(async p => { await p.getByRole('button', { name: 'Open house map', exact: true }).click(); await p.getByRole('button', { name: 'Walk to Kitchen', exact: true }).click(); }));
   await Promise.all(pages.map(p => p.locator('.arena-room').filter({ hasText: 'Kitchen' }).waitFor({ timeout: 20000 })));
   await phone.screenshot({ path: new URL('live-shared-phone.png', artifacts).pathname }); await host.screenshot({ path: new URL('live-shared-desktop.png', artifacts).pathname });
@@ -68,6 +72,7 @@ try {
   await writeFile(new URL('live-shared-browser.json', artifacts), JSON.stringify(result, null, 2));
   }
 } catch (error) {
+  console.error('Live check state:', JSON.stringify(states.map(s => ({ phase: s.phase, scores: s.players.map(p => p.score), claimed: s.round?.targets.filter(t => t.claimedBy).length }))), errors);
   for (let i = 0; i < pages.length; i++) await pages[i].screenshot({ path: new URL(`live-shared-failure-${i}.png`, artifacts).pathname }).catch(() => {});
   throw error;
 } finally { await browser.close(); }
