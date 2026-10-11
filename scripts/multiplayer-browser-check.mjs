@@ -24,7 +24,7 @@ const errors = [], pages = [], contexts = [];
 const smoke = process.env.FATHER_HUNTER_MULTIPLAYER_SMOKE === '1';
 try {
   const address = await app.listen({ host: '127.0.0.1', port: 0 });
-  vite = await createServer({ root: fileURLToPath(new URL('../apps/web', import.meta.url)), logLevel: 'error', server: { host: '127.0.0.1', port: 0, proxy: { '/api': { target: address, changeOrigin: false } } } });
+  vite = await createServer({ root: fileURLToPath(new URL('../apps/web', import.meta.url)), logLevel: 'error', server: { host: '127.0.0.1', port: 0, proxy: { '/api': { target: address, changeOrigin: false, ws: true } } } });
   await vite.listen(); const base = `http://127.0.0.1:${vite.httpServer.address().port}`;
   browser = await chromium.launch();
   for (let i = 0; i < 5; i++) {
@@ -228,7 +228,7 @@ try {
         await page.getByRole('button', { name: 'Back to the hunt', exact: true }).click();
       }
       await page.getByRole('button', { name: 'Create hunt', exact: true }).click();
-      await page.getByRole('button', { name: 'Enter the house', exact: true }).waitFor();
+      await page.getByRole('button', { name: 'I’m ready', exact: true }).waitFor();
       const newId = new URL(page.url()).pathname.split('/').pop();
       const view = await (await page.request.get(`${base}/api/rooms/${newId}`)).json();
       assert.equal(view.room.playerCount, 1); assert.equal(view.standings[0].bestScore, 0);

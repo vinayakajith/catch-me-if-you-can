@@ -25,9 +25,14 @@ export function PlayerPortrait({ roomId, player }: { roomId: string; player: Sha
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   const generating = job && ['uploading', 'queued', 'generating'].includes(job.status);
+  const usePreset = async () => {
+    setBusy(true); setError('');
+    try { await roomRequest(`/api/rooms/${roomId}/portrait`, { jobId: null }); setJob(null); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
   return <div className="player-portrait-controls"><h3>Your witch. Your face.</h3><p className="portrait-privacy">We delete your original photo after processing. Your game face stays only for this room, which closes after one hour.</p>
     {editing ? <><PhotoCrop handle={crop} onReady={() => { setReady(true); }} onError={setError} /><button className="button secondary" disabled={!ready || busy} onClick={() => void send()}>{busy ? 'Uploading…' : 'Make my laughing face'}</button><button className="text-button" onClick={() => setEditing(false)}>Keep my preset</button></> : <>
-      <div className="portrait-options"><button className="text-button" disabled={busy} onClick={async () => { await roomRequest(`/api/rooms/${roomId}/portrait`, { jobId: null }); setJob(null); }}>Use preset witch</button><button className="text-button" disabled={!available || busy || !!generating} onClick={() => { selected.current = uploadKey(); setReady(false); setError(''); setEditing(true); }}>Upload my photo</button></div>
+      <div className="portrait-options"><button className="text-button" disabled={busy} onClick={() => void usePreset()}>Use preset witch</button><button className="text-button" disabled={!available || busy || !!generating} onClick={() => { selected.current = uploadKey(); setReady(false); setError(''); setEditing(true); }}>Upload my photo</button></div>
       <p role="status">{generating ? 'Making your laughing face. You can ready up and play now.' : job?.status === 'ready' ? 'Your face is ready. Same face, every glorious bonk.' : job?.error ? 'The photo spell fizzled. Your preset is ready to play.' : !available ? 'Photo magic is resting. Your coloured witch is ready.' : 'Optional · one laughing face for all your witch’s moves.'}</p>
     </>}{error && <p className="shared-error" role="alert">{error}</p>}
   </div>;

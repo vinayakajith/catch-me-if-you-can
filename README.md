@@ -4,7 +4,11 @@ A very unserious hidden-object game. An old witch in violet is making a potion. 
 
 ## Current milestone
 
-The local game includes personal character generation: upload and crop a photo, approve one recognizable face, generate five additional expressions, preview him in the wardrobe and Liberty pose, then take him into the intro and hunt. The game has five rooms, twenty hiding places, 12–20 randomized targets including one broom rider, editable names, touch navigation, comic captures, results, and replay. The total cast is deliberately kept out of the story and HUD. Balaji remains a fictional sample character you can play without an API key. Five-player rooms are now implemented locally. A creator shares one invite; each player explores their own shuffled house on their own two-minute timer. Best scores and friend catches update live. Every player can create a fresh invite from results, reusing the character or uploading someone else. Full serverless AWS adapters and infrastructure are implemented and tested locally; actual AWS deployment and domain setup are the next phase.
+New invites now put **2–5 players in one shared house**. Join the lobby, optionally upload one laughing player portrait, mark Ready, and let the host start. Twenty fathers are hidden among 29 places; the first valid catch scores. One shared two-minute timer, live visible players, distinct body colours, a desktop board and mobile results keep the competition clear. A one-tap practice and contextual Open/Catch button handle walking for beginners. Landscape is preferred; portrait remains playable.
+
+The father character still uses one approved likeness plus five expressions. The waiting-room player portrait uses one laughing image for every witch animation and does not delay starting. Original player photos are deleted after processing; game faces expire with the one-hour room. The prior independent-room protocol and solo play remain compatible.
+
+The app is hosted on AWS at `https://catchmeifyoucan.space`. This shared-room update must be deployed by the project owner after reviewing the CDK diff; local tests do not update the live site. The production image allowance is $15 lifetime, while the development ledger remains capped at $1.
 
 The spotlighted Liberty pose is a guaranteed easy catch. He is deadly serious, holding a flashlight and notebook in his lungi. A wall portrait is serious too. Other hiding dads laugh: tumbling in a washer, spinning in a microwave, cramped in a wardrobe, upside-down in a pickle jar, inside the commode, and elsewhere. Under the bed, only his lungi hem and legs show. Opening a container reveals its occupant without awarding a point.
 
@@ -45,23 +49,23 @@ Local source photos, generated assets, SQLite databases, and `.env` are ignored 
 
 - Enter your player name and edit the assistant’s name. Watch the potion, forbidden entrance, duplication, escape and the witch’s response, or skip to the hunt. Loading and the intro consume no round time.
 - Tap clear floor or a room on the map to walk through the house. Keyboard arrows/WASD and the optional touch joystick work too.
-- Tap furniture to investigate. Open the commode lid, wardrobe and appliance doors. E and Check inspect nearby furniture.
+- Tap furniture to investigate. Open the commode lid, wardrobe and appliance doors. E and the contextual Open/Catch button approach the selected nearby object.
 - Tap an exposed copy. The witch walks over, extracts him, gives his head one comic bonk with a giant wooden hammer, and bags him. The visible count changes after he lands. A spotted peeker cannot duck away during the approach.
 - Tap the broom rider once. He hovers in place while the witch approaches. There is no precision chase.
-- The statue is an easy opening catch; other occupants shuffle among twenty places, with targets in all five rooms. Every hunt has one broom rider and 11–19 hidden dads.
+- The statue is an easy opening catch; new shared rounds shuffle nineteen hidden copies among 29 places, with targets in all five rooms, plus one broom rider. Solo retains its original randomized cast.
 - Room hints unlock after twenty seconds without a catch. The round ends at exactly two minutes or earlier if the whole cast is bagged. Time continues in background tabs and while help is open; the session also enforces a one-hour hard expiry.
 - Results give your actual count and elapsed time. Replay preserves names, the personal character pack, and body colour while changing occupied hideouts. **Create your own game** makes a separate one-hour invite and empty leaderboard. Reuse the same artwork without an image call, or choose another photo.
 - Friend catches appear as brief plain text. The desktop leaderboard sits beside the house; on mobile it appears only after the attempt finishes, including in landscape. Sound is optional; reduced motion uses still intro scenes and quieter capture transitions. Pause/resume preserves the exact intro clock, and results wait for the final sack animation.
 
 ## Multiplayer rules
 
-- Five seats including the host, with a distinct agent name per seat. The same browser resumes the same player. Joining is atomic even when several people arrive together.
-- Each agent has an independent house, catches, and two-minute attempt. Two friends can both catch their own statue. Everyone shares the chosen character, cast size, difficulty mix, and live board.
-- Loading and the intro do not use attempt time. Each replay reshuffles occupied hideouts while keeping the same mix and all five rooms. The spotlight statue and broom rider are always present.
-- Movement, catches, scores, and deadlines are checked by the server. Repeated commands cannot add points or duplicate notifications. During a connection failure, movement freezes while the timer continues. Refresh resumes the confirmed sack and original deadline; another tab must take control explicitly.
-- The board stores each agent’s best score across replays. Ties share a rank. A lower replay score cannot erase a personal best.
-- The invite closes one hour after creation. No new attempt can start with less than two minutes left. Scoring stops at closure; final scores and member-only artwork stay available for 24 more hours. Members can reuse that artwork for a fresh invite. Access then stops and cleanup deletes the room copies and records. The hour does not restart when someone joins, refreshes, or replays.
+- Five seats including the host. Players join with a name, prepare their face or preset, and mark Ready. The host starts after at least two players are connected and ready.
+- Everyone shares the same twenty targets and countdown. Each father awards one point total. A catch is server-validated and immediately broadcast with the catcher’s name and hiding place.
+- Movement predicts locally, syncs over WebSockets at five batches per second, and interpolates peers. The clock continues through disconnects; refresh recovers the same round. A disconnected host transfers after thirty seconds.
+- Rematches reshuffle nineteen hidden copies across 29 spots plus one broom rider. Scores reset each round; ties share the win. Late arrivals wait for the next round.
+- The invite expires one hour after creation. Final scores and father artwork retain 24 additional hours; player faces do not. Any member can create a fresh invite with the father artwork or upload another father.
 
+See [room contracts and retention](docs/ROOMS.md) for protocol compatibility, image privacy and transport details.
 
 ## Verification
 
@@ -72,6 +76,8 @@ npx playwright install chromium
 npm run test:browser
 npm run test:characters
 npm run test:multiplayer
+npm run test:shared
+npm run test:load:shared # three minutes, five sockets on DynamoDB Local
 npm run test:load
 npm run test:aws       # Docker: local DynamoDB only
 npm run test:load:aws  # ten minutes, five players on DynamoDB Local
@@ -83,7 +89,7 @@ npm run security:check
 npm audit --audit-level=high
 ```
 
-Tests use Node's built-in test runner. Core tests check all twenty interaction anchors and every pair of routes between them, 500 randomized placements, personalized story/catch names and character metadata, peek timing, remembered sightings, search/reveal/catch ordering, duplicate scoring, the exact two-minute boundary, collision-safe broom routes with 6–10 second rests, locking a moving rider, hints, and a complete hunt. Backend tests cover generation approval, idempotency, private ownership, interrupted uploads, retry limits, expiry, image normalization, source deletion, and the persistent budget cap. Room tests cover concurrent seat limits, independent catches, action receipts, movement limits, tab takeover, database restart, personal asset sharing, preserved best scores, and one-hour/24-hour expiry boundaries.
+Tests use Node's built-in test runner. Core tests check all twenty-nine interaction anchors and every pair of routes between them, 500 randomized placements, personalized story/catch names and character metadata, peek timing, remembered sightings, search/reveal/catch ordering, duplicate scoring, the exact two-minute boundary, collision-safe broom routes with 6–10 second rests, locking a moving rider, hints, and a complete hunt. Backend tests cover generation approval, idempotency, private ownership, interrupted uploads, retry limits, expiry, image normalization, source deletion, and the persistent budget cap. Room tests cover concurrent seat limits, independent catches, action receipts, movement limits, tab takeover, database restart, personal asset sharing, preserved best scores, and one-hour/24-hour expiry boundaries.
 
 The browser check starts a development server if necessary, exercises desktop and mobile interactions, and saves screenshots to ignored `artifacts/`. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an existing Chromium installation. Set `FATHER_HUNTER_URL` to test an already-running development server. Run `FATHER_HUNTER_EDGES=1 npm run test:browser` for short-phone, spotlight approach, timeout, loading and recovery checks. For an additional art and interaction sweep, run `FATHER_HUNTER_CATALOGUE=1 npm run test:browser`: it finds deterministic seeds covering all twenty hideouts, walks to each one, inspects it, saves its rendered pose, and taps it into the sack.
 

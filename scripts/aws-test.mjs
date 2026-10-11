@@ -13,7 +13,7 @@ try {
   }
   if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(endpoint)) throw new Error('Only a local DynamoDB test endpoint is allowed.');
   for (let i = 0; ; i++) { try { await fetch(endpoint); break; } catch (error) { if (i > 30) throw error; await sleep(500); } }
-  const load = process.argv.includes('--load');
-  const child = spawn(process.execPath, load ? ['scripts/multiplayer-load-check.mjs'] : ['--test', 'apps/server/test/aws/*.test.ts'], { stdio: 'inherit', env: { ...process.env, FH_DYNAMO_ENDPOINT: endpoint, ...(load ? { FH_LOAD_STORAGE: 'dynamo' } : {}) } });
+  const load = process.argv.includes('--load'), shared = process.argv.includes('--shared-load');
+  const child = spawn(process.execPath, shared ? ['scripts/shared-load-check.mjs'] : load ? ['scripts/multiplayer-load-check.mjs'] : ['--test', 'apps/server/test/aws/*.test.ts'], { stdio: 'inherit', env: { ...process.env, FH_DYNAMO_ENDPOINT: endpoint, ...(load ? { FH_LOAD_STORAGE: 'dynamo' } : {}) } });
   process.exitCode = await new Promise(resolve => child.once('exit', code => resolve(code ?? 1)));
 } finally { if (owned) execFileSync('docker', ['stop', name], { stdio: 'ignore' }); }

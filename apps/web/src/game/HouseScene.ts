@@ -57,6 +57,8 @@ export class HouseScene extends Phaser.Scene {
   private playerTextures = new Map<string, string>();
   private selfLabel?: Phaser.GameObjects.Text;
   private lastLabel = '';
+  private queuedTap?: Point;
+  private queuedWalk?: Point;
 
 
   constructor(bridge: GameBridge) { super('House'); this.bridge = bridge; }
@@ -210,7 +212,8 @@ export class HouseScene extends Phaser.Scene {
   }
 
   private async tap(point: Point) {
-    if (!this.bridge.inputEnabled || this.capturing || this.acting) return;
+    if (!this.bridge.inputEnabled) return;
+    if (this.capturing || this.acting) { this.queuedTap = point; this.queuedWalk = undefined; return; }
     const state = this.bridge.session.getSnapshot();
     if (state.status !== 'playing') return;
     for (const target of state.targets.filter(t => !t.claimedBy)) {
@@ -253,7 +256,8 @@ export class HouseScene extends Phaser.Scene {
 
   private walkTo(point: Point, pending?: Pending) {
     const state = this.bridge.session.getSnapshot();
-    if (state.status !== 'playing' || this.capturing) return;
+    if (state.status !== 'playing') return;
+    if (this.capturing || this.acting) { this.queuedWalk = point; this.queuedTap = undefined; return; }
     this.pending = pending;
     if (pending && this.canPerform(pending)) { this.route = []; this.perform(); return; }
     this.route = findPath(state.player.position, point);
@@ -418,6 +422,10 @@ export class HouseScene extends Phaser.Scene {
     const now = this.bridge.session.time();
     this.animateDads(now);
     this.animateCapture(now); // Also settle a last capture after a tab was in the background.
+    if (!this.capturing && !this.acting && this.bridge.inputEnabled) {
+      if (this.queuedTap) { const point = this.queuedTap; this.queuedTap = undefined; void this.tap(point); }
+      else if (this.queuedWalk) { const point = this.queuedWalk; this.queuedWalk = undefined; this.walkTo(point); }
+    }
     const stateBefore = this.bridge.session.getSnapshot();
     this.animatePlayers(time);
     const label = this.contextAction().label; if (label !== this.lastLabel) { this.lastLabel = label; this.bridge.actionLabel?.(label); }

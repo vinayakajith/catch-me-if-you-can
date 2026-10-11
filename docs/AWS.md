@@ -1,6 +1,6 @@
 # Catch Me If You Can on AWS
 
-The serverless implementation is ready to deploy after the AWS account and exact hostname are connected. Start with sample artwork: `ImageEnabled=false`, `ImageBudgetMicros=0`. AWS hosting and a production image allowance are separate decisions.
+The existing deployment uses `catchmeifyoucan.space` in `ap-south-1`. The owner authorized the tested shared-house update to be deployed on 2026-10-11. This update adds the dedicated WebSocket API/Lambda and keeps the existing HTTP API, storage and image budget. Production generation is authorized at $15 lifetime; deployment must preserve `ImageEnabled=true`, `ImageBudgetMicros=15000000` and `ConcurrencyMode=shared` unless the owner changes them explicitly. New installations still default to images off and budget zero.
 
 ## Understand the pieces
 
@@ -10,6 +10,8 @@ flowchart LR
   CDN --> Web[Private S3: React + Phaser]
   CDN --> API[HTTP API Gateway + Lambda]
   API --> State[DynamoDB: rooms, attempts, jobs, limits]
+  Phone -->|single-use ticket| WS[WebSocket API + realtime Lambda]
+  WS --> State
   Phone -->|short signed upload| Photos[Private S3: photos + atlases]
   State -->|outbox stream| Dispatcher[Dispatch Lambda]
   Dispatcher --> Queue[SQS]
@@ -25,7 +27,7 @@ flowchart LR
 
 CloudFront serves the game and sends `/api/*` to Lambda. Owner cookies pass only to the API, which checks them before reading artwork or changing state. An origin secret prevents direct API Gateway requests from forging the viewer address used for creation limits. The real game URL is the configured custom domain.
 
-DynamoDB holds durable state. Movement has a separate item per player; catches transact with scores and notices. Instances can restart without losing rooms. Polling remains the realtime transport, so the browser works with both local and AWS adapters.
+DynamoDB holds durable state. Movement has a separate item per player; catches transact with scores and notices. Instances can restart without losing rooms. New rooms use WebSockets for gameplay, with short-lived single-use tickets issued by the HTTP API. The dedicated realtime Lambda has no image library layer, S3 access or provider secret; it handles movement, shared catches and connection fanout. Old independent rooms retain HTTP polling.
 
 Photos upload directly to private S3 using a five-minute, size-limited policy, avoiding Lambda’s request payload limit. The worker verifies the digest/ETag and normalizes the photo. Job and room reads authorize the cookie before signing a GET lasting at most 60 seconds. S3 CORS allows only the game origin.
 
@@ -44,10 +46,11 @@ npm run infra:synth
 npm run test:lambda
 npm run test:aws
 npm run test:load:aws
+npm run test:load:shared
 npm run security:check
 ```
 
-`build:aws` writes the frontend to `apps/web/dist`, Lambda bundles to `artifacts/aws/functions`, and a Linux x86_64 Sharp layer to `artifacts/aws/layer`. Only those explicit directories become deployment assets. `.env`, uploaded photos, SQLite files and the development ledger are excluded. The runtime check loads both bundles and processes an image inside the official Lambda Node 24 container.
+`build:aws` writes the frontend to `apps/web/dist`, Lambda bundles to `artifacts/aws/functions`, and a Linux x86_64 Sharp layer to `artifacts/aws/layer`. Only those explicit directories become deployment assets. `.env`, uploaded photos, SQLite files and the development ledger are excluded. The runtime check loads all three bundles and processes an image inside the official Lambda Node 24 container.
 
 `infra:synth` writes a reviewable CloudFormation template to `artifacts/cdk.out`, without deploying. Infrastructure tests check private buckets, isolated secrets, image generation disabled by default, TTL, throttles, queues and routes. DynamoDB tests reject non-loopback endpoints and use dummy credentials.
 
@@ -109,11 +112,15 @@ To increase capacity later, request **AWS Lambda → Concurrent executions** in 
 5. Open `GameUrl` using HTTPS. Refresh a direct `/r/<id>` invite and `/create?from=<id>`. Real app routes return HTML; API errors and missing assets keep their proper responses.
 6. Complete the live smoke checks below before wider sharing. AWS latency, IAM behavior, DNS and CloudFront deployment cannot be proven by local synthesis.
 
+## Updating this existing deployment
+
+Build with `npm run build:aws`, then review `npx cdk diff CatchMeIfYouCan --profile catch-me-if-you-can --region ap-south-1 --method template`. The expected additions include the WebSocket API/stage/routes, realtime Lambda and connection IAM permissions, plus its exact endpoint in the browser CSP. Preserve the existing domain, certificate and budgets. After deployment, verify `RealtimeUrl`, create a new invite (old invites keep their old protocol), and run the five-phone checks below. No DNS record is required for the AWS WebSocket endpoint.
+
 ## Enable personal photos separately
 
 The OpenAI secret initially contains a disabled placeholder. Only the image worker can read it. In Secrets Manager, replace it with the **raw fresh production key** using the console’s plaintext editor. Keep keys out of commands, Git, frontend variables and screenshots. The development key and ledger stay local.
 
-After a production budget is explicitly approved, update `ImageBudgetMicros` and `ImageEnabled=true`. One dollar is 1,000,000 microdollars. This is a **lifetime ceiling**, not a daily allowance. Increasing the parameter raises that ceiling; rooms, days, restarts and deployments never reset usage. Each call reserves $0.20 under the pinned request profile. Missing usage, connection failures and interrupted calls retain the reservation. Six successful calls normally make one pack.
+After a production budget is explicitly approved, update `ImageBudgetMicros` and `ImageEnabled=true`. One dollar is 1,000,000 microdollars. This is a **lifetime ceiling**, not a daily allowance. Increasing the parameter raises that ceiling; rooms, days, restarts and deployments never reset usage. Each call reserves $0.20 under the pinned request profile. Missing usage, connection failures and interrupted calls retain the reservation. Six successful calls normally make a father pack. A player portrait makes one laughing face and shares this same allowance; it never starts a six-expression job.
 
 Never delete `IMAGE_BUDGET` or `IMAGE_SPEND#...` items to unblock generation. Financial records have no TTL; the table has retention/deletion protection. Production budget changes do not authorize further development spending. `.father-hunter/development-spend.sqlite` remains capped at $1 and must not be reset or moved.
 
@@ -122,20 +129,20 @@ Invalid access/quota responses pause generation for five minutes and preserve fa
 ## Verify through the real domain
 
 - With images disabled, share one named sample room, join from five independent browsers and reject a sixth seat. Check secure HTTP-only cookies and the canonical invite hostname.
-- Play concurrent two-minute hunts. Check independent catches, peer notices, mobile results-only board, desktop sidebar, reconnect, refresh and best-score replay.
+- Join the same shared lobby from five browsers. Ready everyone, start from the host, verify one countdown and visible movement. Race for the same father: exactly one score must increase. Check mobile practice, one-tap navigation, desktop board, mobile results, reconnect, refresh, host transfer and rematches.
 - Create a game from each participant’s results. Verify distinct links, empty boards and fresh hour windows. Use a controlled test fixture for closure and the additional 24-hour results/artwork boundary.
 - Confirm strangers cannot read private jobs, photos or room atlases. Direct S3 reads and direct gateway calls must fail. API failures must not become HTML.
 - In a fixture-only test deployment, verify upload CORS, signed-image redirects, SQS duplicate delivery, outbox recovery and cleanup before a separately approved real likeness test.
 
 ## Limits, monitoring and recovery
 
-Shared mode starts at 60 API requests/second, burst 10, using the account's available concurrency. Reserved mode allows 100 requests/second, burst 200, with a cap of 20 concurrent HTTP Lambdas. Continuous movement sends up to five batches per second, plus up to two polls; actions can flush sooner. These are starting limits, not unlimited public capacity; adjust after measuring the deployed service. Gateway throttles are best-effort targets, not spending caps. Creation limits are atomic across instances. Photo creation also has a global 20-job/day limit. The image queue processes at most two invocations concurrently in either mode. The 300-second worker uses a 1,800-second queue visibility timeout, following [AWS SQS guidance](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html).
+Shared mode starts at 60 API requests/second, burst 10, using the account's available concurrency. Reserved mode allows 100 requests/second, burst 200, with a cap of 20 concurrent HTTP Lambdas. Shared movement sends up to five WebSocket batches per second; idle connections heartbeat every two seconds. Legacy rooms additionally poll twice per second; actions can flush sooner. These are starting limits, not unlimited public capacity; adjust after measuring the deployed service. Gateway throttles are best-effort targets, not spending caps. Creation limits are atomic across instances. Photo creation also has a global 20-job/day limit. The image queue processes at most two invocations concurrently in either mode. The 300-second worker uses a 1,800-second queue visibility timeout, following [AWS SQS guidance](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html).
 
 The browser predicts up to one second of unconfirmed walking. The server accepts the same bounded backlog using elapsed server time and still validates each collision step, sequence, catch and deadline. Face visibility allows one second of delivery delay; that allowance never extends the round timer or catch distance. Five-browser tests inject 350 ms command latency as well as throttling and lost receipts. If players report slow walking, check rendering and round-trip latency alongside Lambda duration and throttles; increasing Lambda capacity alone cannot repair a client that stalls while awaiting acknowledgements.
 
 CloudWatch has a dashboard and alarms for API failures/throttles, image failures/backlog, dead letters and cleanup failures. Logs retain seven days without request bodies, cookies or raw provider errors. No email or external notification subscription is created automatically.
 
-Cleanup runs each minute. Access deadlines are enforced on requests; [DynamoDB TTL is asynchronous physical deletion](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html). Source photos are removed at finalization; unfinished jobs expire after 24 hours and incomplete direct uploads after 15 minutes. Room art lasts through the one-hour game plus 24-hour results window. S3’s three-day lifecycle bounds orphan retention during failures.
+Cleanup runs each minute. Access deadlines are enforced on requests; [DynamoDB TTL is asynchronous physical deletion](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html). Player source photos are removed after processing and player faces expire with the one-hour room; father source photos are removed at finalization and unfinished father jobs expire after 24 hours and incomplete direct uploads after 15 minutes. Room art lasts through the one-hour game plus 24-hour results window. S3’s three-day lifecycle bounds orphan retention during failures.
 
 For an image outage, set `ImageEnabled=false` and preserve the ledger. Check secret configuration, queue age and redacted job status. A dead-letter delivery is not permission to generate again: revisions and saved state control that. Do not reset uncertain reservations without reconciling provider charges.
 

@@ -41,6 +41,11 @@ test('serverless infrastructure starts with private storage, isolated secrets an
       assert.deepEqual(fn.Properties.ReservedConcurrentExecutions, cap === undefined ? undefined : { 'Fn::If': ['ReserveCapacity', cap, { Ref: 'AWS::NoValue' }] }, 'Shared mode must remove every reservation, including deployment helpers');
     }
     const api = Object.values(functions).find(r => r.Properties.Handler === 'api.handler');
+    const realtime = Object.values(functions).find(r => r.Properties.Handler === 'realtime.handler');
+    assert.ok(realtime); assert.equal(realtime.Properties.Layers, undefined);
+    assert.deepEqual(Object.keys(realtime.Properties.Environment.Variables).sort(), ['FATHER_HUNTER_PUBLIC_ORIGIN', 'FH_TABLE']);
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', { ProtocolType: 'WEBSOCKET' });
+    assert.ok(api.Properties.Environment.Variables.FH_SOCKET_ENDPOINT);
     assert.equal(api.Properties.Environment.Variables.FH_OPENAI_SECRET_ARN, undefined);
     assert.match(JSON.stringify(api.Properties.Environment.Variables.FH_ORIGIN_SECRET), /resolve:secretsmanager/);
     const policies = template.findResources('AWS::IAM::Policy') as Record<string, any>;

@@ -37,7 +37,7 @@ export class SharedClient {
   private accept(view: SharedView) {
     const old = this.state.view;
     if (old) {
-      const newer = view.serverNow >= this.latestState;
+      const newer = view.serverNow > this.latestState || view.serverNow === this.latestState && (view.round?.id !== old.round?.id || (view.round?.revision ?? 0) >= (old.round?.revision ?? 0));
       const players = (newer ? view.players : old.players).map(p => {
         const other = (newer ? old.players : view.players).find(o => o.id === p.id);
         return other && other.revision > p.revision ? other : p;
@@ -59,7 +59,7 @@ export class SharedClient {
     const now = m.type === 'state' ? m.view.serverNow : m.serverNow;
     if (waiting) this.offset = now - (waiting.sentAt + Date.now()) / 2;
     this.state = { ...this.state, connected: true, error: '' }; this.failures = 0;
-    if (m.type === 'state') this.accept(m.view);
+    if (m.type === 'state') { this.accept(m.view); if (m.view.phase === 'closed') { this.stopped = true; clearInterval(this.pulse); this.ws?.close(); } }
     else if (this.state.view?.round?.id === m.roundId) {
       const view = this.state.view;
       this.state = { ...this.state, view: { ...view, players: view.players.map(p => p.id === m.player.id && m.player.revision > p.revision ? m.player : p) } }; this.emit();
@@ -77,8 +77,8 @@ export class SharedClient {
       ws.onmessage = this.receive;
       ws.onopen = () => {
         this.state = { ...this.state, connected: true, error: '' }; this.emit();
-        void this.request({ kind: 'hello' }).catch(() => {});
         for (const p of this.pending.values()) { p.sentAt = Date.now(); ws.send(JSON.stringify(p.message)); }
+        if (!this.pending.size) void this.request({ kind: 'hello' }).catch(() => {});
       };
       ws.onclose = () => {
         this.state = { ...this.state, connected: false, error: this.stopped ? this.state.error : 'Reconnecting… your place is saved.' }; this.emit(); this.schedule();
@@ -88,7 +88,7 @@ export class SharedClient {
         if (Date.now() - this.lastMessage > 8000) this.ws?.close();
         if (this.ws?.readyState === WebSocket.OPEN) {
           for (const p of this.pending.values()) if (Date.now() - p.sentAt > 2000) { p.sentAt = Date.now(); this.ws.send(JSON.stringify(p.message)); }
-          if (![...this.pending.values()].some(p => p.message.kind === 'ping')) void this.request({ kind: 'ping' }).catch(() => {});
+          if (!this.pending.size) void this.request({ kind: 'ping' }).catch(() => {});
         }
       }, 2000);
     } catch (error) { this.state = { ...this.state, error: (error as Error).message }; this.emit(); this.schedule(); }

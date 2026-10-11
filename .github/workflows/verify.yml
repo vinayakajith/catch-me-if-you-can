@@ -30,6 +30,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:characters
       - run: npm run test:multiplayer
+      - run: npm run test:shared
+      - run: npm run test:load:shared
       - run: npm run test:browser
       # CI uses fixture providers, temporary local storage and Docker only.
       # No AWS credentials, OpenAI secrets or deployment permissions are needed.

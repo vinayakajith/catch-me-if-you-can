@@ -47,7 +47,13 @@ export const hunterSvg = svg(`<ellipse cx="81" cy="145" rx="30" ry="9" fill="#40
 export const toiletRimSvg = svg('<path d="M28 80A52 47 0 0 0 132 80L115 82A35 32 0 0 1 45 82Z" fill="#f7f1dd"/>');
 
 // Phaser's SVG loader decodes data URLs as base64, including in its Canvas fallback.
-export const svgUri = (source: string) => `data:image/svg+xml;base64,${btoa(String.fromCharCode(...new TextEncoder().encode(source)))}`;
+export function svgUri(source: string) {
+  const bytes = new TextEncoder().encode(source); let binary = '';
+  // Personal portraits embed a PNG in the SVG. Spreading the entire image into
+  // one call exceeds the browser's argument limit for normal-size face images.
+  for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
 
 // Hideouts have a back and a transparent foreground. Balaji sits between them.
 // Keep all layers in the same 160px coordinate system so the rim really overlaps him.
