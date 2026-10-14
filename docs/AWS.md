@@ -1,6 +1,18 @@
 # Catch Me If You Can on AWS
 
-The existing deployment uses `catchmeifyoucan.space` in `ap-south-1`. The owner authorized the tested shared-house update to be deployed on 2026-10-11. This update adds the dedicated WebSocket API/Lambda and keeps the existing HTTP API, storage and image budget. Production generation is authorized at $15 lifetime; deployment must preserve `ImageEnabled=true`, `ImageBudgetMicros=15000000` and `ConcurrencyMode=shared` unless the owner changes them explicitly. New installations still default to images off and budget zero.
+The owner requested full AWS shutdown on 2026-10-14, superseding the earlier deployment authorization. The public game at `catchmeifyoucan.space` is offline. Do not bootstrap or redeploy unless the owner explicitly requests it. The architecture and deployment instructions below are retained for reference; the previous backend region was `ap-south-1`.
+
+## Shutdown status, 14 October 2026
+
+The five application Lambda functions were first restricted to zero concurrency and the cleanup schedule disabled. CloudFormation deletion then removed the functions. The retained DynamoDB table, production key, website bucket and private image bucket were explicitly deleted, including every website object version. Production image accounting was archived locally before database deletion: 23 settled requests, no unsettled reservations, and 1,553,181 microdollars ($1.553181) used against the $15 lifetime ceiling. The archive is in ignored `artifacts/aws-shutdown-2026-10-14/production-image-spend.json`; no credentials or player photos were exported. The local development ledger was not modified.
+
+Read-only checks across all 17 enabled AWS regions found no EC2 instances, Auto Scaling groups, ECS clusters, EC2 fleets, Spot fleets, or active/open Spot instance requests. The deployment region also has no EventBridge rules, Scheduler schedules, or CodePipeline pipelines. GitHub CI only tests with fixture providers and has no AWS deployment credentials.
+
+Both `CatchMeIfYouCan` and `CDKToolkit` reached `DELETE_COMPLETE`. The retained CDK asset bucket was then explicitly deleted. Final service inventories confirmed no S3 buckets, Lambda functions/layers/event mappings, HTTP or WebSocket APIs, DynamoDB tables/backups, SQS queues, Secrets Manager secrets, CloudWatch log groups/alarms/dashboards, ECR repositories, or app/CDK IAM roles remained in the deployment scope. The CloudFront distribution and its dedicated ACM certificate in `us-east-1` were deleted. The former HTTPS URL no longer completes a TLS handshake. No app resources remain running or configured to restart.
+
+The AWS account has no Route 53 hosted zones or registered domains. External DNS and domain registration are outside this AWS teardown.
+
+A future deployment must restore the recorded production spending before enabling image generation; deleting infrastructure does not renew the $15 lifetime allowance. New installations default to images off and budget zero. The unchanged development allowance is $1.
 
 ## Understand the pieces
 

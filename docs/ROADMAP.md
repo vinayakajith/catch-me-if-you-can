@@ -12,9 +12,9 @@
 
 Implemented: one shared twenty-target hunt, host-controlled lobby/countdown, visible coloured witches, WebSocket movement, one-tap practice and contextual actions, fullscreen landscape with portrait fallback, one laughing player portrait and room-bound deletion. Existing solo and independent invites remain compatible.
 
-## Next: owner deployment of the shared-room update
+## AWS shutdown
 
-Follow [the learning and deployment guide](AWS.md). The domain and existing stack are live. Review the new WebSocket resources and deploy while preserving the approved production settings. Verify five browsers in one shared round through the real domain, HTTPS cookies, direct-invite refresh, private S3 access and queue/cleanup monitoring. Use a fresh production OpenAI key and an explicitly approved budget before enabling photo generation. The development key and ledger stay local.
+The shared-room update was deployed and verified on 11 October 2026. On 14 October the owner requested full AWS removal. The public game is offline; development and playtesting can continue locally. See [shutdown status and the historical deployment guide](AWS.md). A new AWS deployment requires a new owner request and must preserve the prior production image spending. The development key and ledger stay local.
 
 ## Human acceptance still required
 

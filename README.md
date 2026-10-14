@@ -8,7 +8,7 @@ New invites now put **2–5 players in one shared house**. Join the lobby, optio
 
 The father character still uses one approved likeness plus five expressions. The waiting-room player portrait uses one laughing image for every witch animation and does not delay starting. Original player photos are deleted after processing; game faces expire with the one-hour room. The prior independent-room protocol and solo play remain compatible.
 
-The shared-room update was deployed with the owner’s authorization on 11 October 2026 at **https://catchmeifyoucan.space**. Create a new invite for the shared house; older independent invites retain their original protocol. The production image allowance is $15 lifetime, while the development ledger remains capped at $1.
+The owner requested full AWS shutdown on 14 October 2026. The public game at `catchmeifyoucan.space` is offline; use the local setup below. The shared-room update was previously deployed and verified on 11 October. See [AWS shutdown status](docs/AWS.md). The production image allowance remains $15 lifetime, including $1.553181 already recorded, while the development ledger remains capped at $1.
 
 The spotlighted Liberty pose is a guaranteed easy catch. He is deadly serious, holding a flashlight and notebook in his lungi. A wall portrait is serious too. Other hiding dads laugh: tumbling in a washer, spinning in a microwave, cramped in a wardrobe, upside-down in a pickle jar, inside the commode, and elsewhere. Under the bed, only his lungi hem and legs show. Opening a container reveals its occupant without awarding a point.
 
