@@ -19,6 +19,8 @@ Validation includes rule/backend/browser-transport tests, DynamoDB Local concurr
 Use Node.js 24 or newer and npm 11 or newer.
 
 ```bash
+git clone https://github.com/vinayakajith/catch-me-if-you-can.git
+cd catch-me-if-you-can
 npm ci
 npm run dev
 ```

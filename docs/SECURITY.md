@@ -2,6 +2,14 @@
 
 Reviewed 11 October 2026. Scope: local application, public API boundaries, browser flows, AWS infrastructure changes, repository history and generated bundles. This is an engineering review with automated adversarial tests, not a third-party penetration test of a deployed site.
 
+## Pre-publication credential audit, 14 October 2026
+
+The owner requested that the GitHub repository be made public after checking for credentials and secrets. Remote branches and tags were fetched before the audit. The project scanner passed across 135 current files, 521 reachable history blobs, and 14 built files, including an exact check against the configured development key without printing it.
+
+An independent Gitleaks 8.30.1 scan detected no secrets in all 66 commits, an exported copy of the tracked tree, the built frontend, commit metadata, or logs from all 24 completed GitHub Actions runs. The development key was also checked against the downloaded logs and commit metadata; no matches were found. Audit downloads and reports stayed outside Git.
+
+GitHub had only the main branch, no tags, releases, pull requests, issues, wiki, discussions, Actions artifacts, repository secrets, or repository variables. The active CI run uses fixtures and has no deployment credentials. Local `.env`, uploaded photos, spending ledgers, and shutdown artifacts remain ignored. AWS remains offline; publishing the source does not authorize a new deployment. These results describe the checked contents, rather than a guarantee that scanners can identify every possible secret.
+
 ## Findings and changes
 
 | Area | Result and protection |
